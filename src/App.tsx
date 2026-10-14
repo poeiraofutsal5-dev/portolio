@@ -118,6 +118,29 @@ export default function App() {
         if (hadInitialData && !isSelfSavingRef.current && source === 'cloud') {
           showToast('Conteúdo atualizado simultaneamente via nuvem!');
         }
+
+        // Auto-optimize any heavy legacy images from older sessions in background
+        const hasHeavyImages = cloudData.projects.some(
+          (p) => p.customImageUrl && p.customImageUrl.startsWith('data:image/') && p.customImageUrl.length > 130000
+        );
+        if (hasHeavyImages && !isSelfSavingRef.current) {
+          setTimeout(async () => {
+            try {
+              isSelfSavingRef.current = true;
+              await saveStudioConfigToFirebase(
+                cloudData.projects,
+                cloudData.footerLogo,
+                cloudData.footerLogoHeight
+              );
+            } catch (err) {
+              console.warn('Auto-compress otimizado em segundo plano:', err);
+            } finally {
+              setTimeout(() => {
+                isSelfSavingRef.current = false;
+              }, 1200);
+            }
+          }, 1500);
+        }
       },
       () => {
         setIsCloudConnected(false);

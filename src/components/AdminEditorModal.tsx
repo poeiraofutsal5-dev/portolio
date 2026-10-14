@@ -40,6 +40,9 @@ interface AdminEditorModalProps {
 }
 
 const CATEGORIES: ProjectCategory[] = [
+  'Matchday',
+  'Artes 1920x1080',
+  'Site',
   'Identidade Visual',
   'Branding',
   'Design Editorial',
@@ -73,6 +76,10 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
   // Editing single project state
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
+
+  // In-app deletion and reset confirmation states (iframe-safe, zero window.confirm)
+  const [projectToDelete, setProjectToDelete] = useState<{ id: string; title: string } | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // Async states
   const [isSaving, setIsSaving] = useState(false);
@@ -135,14 +142,50 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
     if (file && editingProject) {
       try {
         setIsOptimizingImage(true);
-        onShowToast('Otimizando imagem para sincronização em tempo real...');
+        onShowToast('Otimizando arte em alta definição...');
         const optimized = await optimizeImageFile(file);
         const approxKb = Math.round(optimized.length / 1024);
+
+        // Auto-detect image dimensions to suggest format and category
+        let detectedFormat = editingProject.aspectRatio || '1350x1080';
+        let suggestedCategory = editingProject.category;
+
+        try {
+          const img = new Image();
+          img.src = optimized;
+          await new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+          if (img.naturalWidth && img.naturalHeight) {
+            const ratio = img.naturalWidth / img.naturalHeight;
+            if (ratio >= 1.15) {
+              detectedFormat = '1920x1080';
+              suggestedCategory = editingProject.category === 'Site' ? 'Site' : 'Artes 1920x1080';
+            } else if (ratio <= 0.95) {
+              detectedFormat = '1350x1080';
+              suggestedCategory = 'Matchday';
+            }
+          }
+        } catch {
+          // ignore detection error
+        }
+
         setEditingProject({
           ...editingProject,
           customImageUrl: optimized,
+          aspectRatio: detectedFormat,
+          category: suggestedCategory,
         });
-        onShowToast(`Imagem otimizada com sucesso (~${approxKb} KB)!`);
+
+        const fmtName =
+          detectedFormat === '1350x1080'
+            ? '1350×1080 (3 por fila)'
+            : detectedFormat === '1920x1080'
+            ? '1920×1080 (4 por fila)'
+            : detectedFormat;
+
+        onShowToast(`Arte otimizada (~${approxKb} KB) · Formato ${fmtName}!`);
       } catch (err) {
         console.error('Erro ao otimizar imagem:', err);
         onShowToast('Erro ao processar imagem.');
@@ -204,20 +247,26 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
     }
   };
 
-  // Delete project
-  const handleDeleteProject = async (projectId: string, projectTitle: string) => {
-    if (window.confirm(`Tem certeza que deseja excluir o projeto "${projectTitle}"?`)) {
-      const updated = projects.filter((p) => p.id !== projectId);
-      try {
-        setIsSaving(true);
-        await onSaveProjects(updated);
-        onShowToast(`Projeto "${projectTitle}" excluído e sincronizado.`);
-      } catch (err: any) {
-        onShowToast(err?.message || 'Erro ao excluir.');
-      } finally {
-        setIsSaving(false);
+  // Delete project execution (called after user confirms in the custom modal)
+  const confirmDeleteProject = async (projectId: string, projectTitle: string) => {
+    const updated = projects.filter((p) => p.id !== projectId);
+    try {
+      setIsSaving(true);
+      await onSaveProjects(updated);
+      if (editingProject?.id === projectId) {
+        setEditingProject(null);
       }
+      onShowToast(`Projeto "${projectTitle}" excluído com sucesso!`);
+    } catch (err: any) {
+      onShowToast(err?.message || 'Erro ao excluir.');
+    } finally {
+      setIsSaving(false);
     }
+  };
+
+  // Open delete confirmation modal
+  const handleDeleteProject = (projectId: string, projectTitle: string) => {
+    setProjectToDelete({ id: projectId, title: projectTitle });
   };
 
   // Duplicate project
@@ -239,23 +288,22 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
   };
 
   // Reset to original projects
-  const handleResetToDefaults = async () => {
-    if (
-      window.confirm(
-        'Deseja restaurar a lista original de projetos? Todas as alterações personalizadas em projetos serão redefinidas e sincronizadas.'
-      )
-    ) {
-      try {
-        setIsSaving(true);
-        await onSaveProjects(JPX_PROJECTS);
-        setEditingProject(null);
-        onShowToast('Projetos restaurados para a versão padrão.');
-      } catch (err: any) {
-        onShowToast(err?.message || 'Erro ao restaurar.');
-      } finally {
-        setIsSaving(false);
-      }
+  const confirmResetToDefaults = async () => {
+    try {
+      setIsSaving(true);
+      await onSaveProjects(JPX_PROJECTS);
+      setEditingProject(null);
+      setShowResetConfirm(false);
+      onShowToast('Projetos restaurados para a versão padrão.');
+    } catch (err: any) {
+      onShowToast(err?.message || 'Erro ao restaurar.');
+    } finally {
+      setIsSaving(false);
     }
+  };
+
+  const handleResetToDefaults = () => {
+    setShowResetConfirm(true);
   };
 
   // Save logo changes atomically across all devices
@@ -300,18 +348,18 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
   const handleStartCreateNew = () => {
     const newProj: Project = {
       id: `project-${Date.now()}`,
-      title: 'NOVO PROJETO',
-      client: 'Cliente Exemplo',
+      title: 'NOVA ARTE',
+      client: 'Cliente / Clube',
       year: new Date().getFullYear().toString(),
-      category: 'Identidade Visual',
-      tagline: 'Descrição curta de impacto visual e posicionamento de marca.',
+      category: 'Matchday',
+      tagline: 'Descrição curta de impacto visual e posicionamento da arte.',
       description: 'Visão geral abrangente do projeto de design.',
       challenge: 'O principal desafio visual e estratégico a ser superado.',
       solution: 'A solução criativa, tipográfica e arquitetural implementada.',
-      deliverables: ['Identidade Visual', 'Brand Guidelines', 'Mockups de Apresentação'],
+      deliverables: ['Arte Digital', 'Post Social', 'Flyer Oficial'],
       palette: ['#050505', '#FFFFFF', '#A1A1AA'],
       typography: 'Syne & Plus Jakarta Sans',
-      aspectRatio: '4/3',
+      aspectRatio: '1350x1080',
       featured: false,
       themeColor: '#FFFFFF',
       customImageUrl: '',
@@ -361,8 +409,9 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                   Doc: UiDBo8OtShNXwp46ZnX2
                 </span>
                 <span className="text-zinc-600">·</span>
-                <span className="text-zinc-400 font-mono text-[11px]">
-                  Nuvem: ~{estimatedPayloadKb} KB / 1000 KB
+                <span className="text-emerald-400 font-mono text-[11px] flex items-center gap-1.5 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Nuvem Sincronizada · {projects.length} {projects.length === 1 ? 'arte' : 'artes'} (Sem Limite)
                 </span>
               </p>
             </div>
@@ -561,7 +610,35 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
 
                       {/* Image Preview & Upload Controls */}
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                        <div className="md:col-span-5 aspect-[4/3] rounded-lg overflow-hidden border border-[#27272A] bg-[#0A0A0C] relative flex items-center justify-center">
+                        <div
+                          style={{
+                            aspectRatio:
+                              editingProject.aspectRatio === '1920x1080'
+                                ? '1080 / 1920'
+                                : editingProject.aspectRatio === '1350x1080'
+                                ? '1080 / 1350'
+                                : editingProject.aspectRatio === '1080x1080'
+                                ? '1 / 1'
+                                : '1080 / 1920',
+                          }}
+                          className="md:col-span-5 max-h-[360px] w-full rounded-xl overflow-hidden border border-[#27272A] bg-[#0A0A0C] relative flex items-center justify-center shadow-lg transition-all"
+                        >
+                          {/* Badge de formato na prévia */}
+                          <div className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md border border-white/15 text-[10px] font-mono text-zinc-300 flex items-center gap-1 shadow">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                editingProject.aspectRatio === '1920x1080' ? 'bg-emerald-400' : 'bg-amber-400'
+                              }`}
+                            />
+                            <span>
+                              {editingProject.aspectRatio === '1920x1080'
+                                ? '1920×1080 (Vertical)'
+                                : editingProject.aspectRatio === '1350x1080'
+                                ? '1350×1080'
+                                : editingProject.aspectRatio || 'Vertical'}
+                            </span>
+                          </div>
+
                           {editingProject.customImageUrl ? (
                             <>
                               <div
@@ -573,7 +650,9 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                               <img
                                 src={editingProject.customImageUrl}
                                 alt={editingProject.title}
-                                className="relative z-10 w-full h-full object-contain p-1"
+                                className={`relative z-10 w-full h-full ${
+                                  editingProject.fitMode === 'cover' ? 'object-cover' : 'object-contain'
+                                } p-1`}
                               />
                             </>
                           ) : (
@@ -606,15 +685,19 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                             {isOptimizingImage ? (
                               <>
                                 <Loader2 className="w-4 h-4 text-emerald-400 animate-spin" />
-                                <span>Otimizando Imagem para a Nuvem...</span>
+                                <span>Otimizando Arte em Alta Definição...</span>
                               </>
                             ) : (
                               <>
                                 <Upload className="w-4 h-4 text-zinc-300" />
-                                <span>Carregar Imagem do Dispositivo (Upload Otimizado)</span>
+                                <span>Carregar Imagem do Dispositivo (Sem Limite)</span>
                               </>
                             )}
                           </button>
+                          <p className="text-[10px] text-zinc-400 font-mono flex items-center gap-1.5">
+                            <span className="text-emerald-400">✨</span>
+                            <span>Artes otimizadas em WebP para nitidez total e carregamento instantâneo.</span>
+                          </p>
 
                           <div className="space-y-1">
                             <label className="text-[11px] font-mono text-zinc-400">
@@ -635,6 +718,43 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                           </div>
 
                           {editingProject.customImageUrl && (
+                            <div className="space-y-1.5 pt-1">
+                              <label className="text-[11px] font-mono text-zinc-400 uppercase flex items-center justify-between">
+                                <span>Ajuste da Imagem no Card</span>
+                                <span className="text-[10px] text-emerald-400">
+                                  {editingProject.fitMode === 'cover' ? 'Preenchendo moldura' : 'Sem cortar · Inteira evidente'}
+                                </span>
+                              </label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingProject({ ...editingProject, fitMode: 'contain' })}
+                                  className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-all text-left flex items-center justify-between ${
+                                    editingProject.fitMode !== 'cover'
+                                      ? 'bg-white text-black border-white font-semibold'
+                                      : 'bg-[#141418] text-zinc-400 border-[#27272A] hover:border-zinc-500'
+                                  }`}
+                                >
+                                  <span>Inteira (Sem Cortar)</span>
+                                  <span className="text-[9px] px-1 py-0.2 rounded bg-black/10">Evidente</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingProject({ ...editingProject, fitMode: 'cover' })}
+                                  className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-all text-left flex items-center justify-between ${
+                                    editingProject.fitMode === 'cover'
+                                      ? 'bg-white text-black border-white font-semibold'
+                                      : 'bg-[#141418] text-zinc-400 border-[#27272A] hover:border-zinc-500'
+                                  }`}
+                                >
+                                  <span>Preencher Tudo</span>
+                                  <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-zinc-300">Cover</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {editingProject.customImageUrl && (
                             <button
                               type="button"
                               onClick={() =>
@@ -643,7 +763,7 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                                   customImageUrl: '',
                                 })
                               }
-                              className="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-1.5"
+                              className="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-1.5 pt-1"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                               <span>Remover imagem personalizada</span>
@@ -711,12 +831,17 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                           </label>
                           <select
                             value={editingProject.category}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              const newCat = e.target.value as ProjectCategory;
+                              let newAr = editingProject.aspectRatio;
+                              if (newCat === 'Matchday') newAr = '1350x1080';
+                              if (newCat === 'Site') newAr = '1920x1080';
                               setEditingProject({
                                 ...editingProject,
-                                category: e.target.value as ProjectCategory,
-                              })
-                            }
+                                category: newCat,
+                                aspectRatio: newAr,
+                              });
+                            }}
                             className="w-full px-3 py-2 bg-[#141418] border border-[#27272A] rounded-lg text-white text-sm focus:outline-none focus:border-white"
                           >
                             {CATEGORIES.map((cat) => (
@@ -725,6 +850,98 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                               </option>
                             ))}
                           </select>
+                        </div>
+                      </div>
+
+                      {/* Format / Grid Row Selector */}
+                      <div className="space-y-2 pt-2 border-t border-[#27272A]/70">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-mono text-zinc-400 uppercase flex items-center gap-2">
+                            <span>Formato & Fila da Arte (Tamanho)</span>
+                            <span className="text-zinc-600">·</span>
+                            <span className="text-emerald-400 text-[10px] lowercase">
+                              {editingProject.aspectRatio === '1350x1080'
+                                ? '4 por fila no portfólio (Matchdays & Cartazes)'
+                                : editingProject.aspectRatio === '1920x1080'
+                                ? '4 por fila no portfólio (Retângulos Verticais)'
+                                : '4 por fila'}
+                            </span>
+                          </label>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {[
+                            {
+                              id: '1350x1080',
+                              name: '1350×1080',
+                              sub: '4 por fila · Fila 1 (Matchday)',
+                              badge: 'Fila 1',
+                            },
+                            {
+                              id: '1920x1080',
+                              name: '1920×1080',
+                              sub: '4 por fila · Fila 2 (Vertical)',
+                              badge: 'Fila 2',
+                            },
+                            {
+                              id: '1080x1080',
+                              name: '1080×1080',
+                              sub: '3 por fila · Quadrado',
+                              badge: 'Feed',
+                            },
+                            {
+                              id: '4:3',
+                              name: '4:3 Clássico',
+                              sub: '3 por fila · Editorial',
+                              badge: 'Padrão',
+                            },
+                          ].map((fmt) => {
+                            const isSelected = (editingProject.aspectRatio || '4:3') === fmt.id;
+                            return (
+                              <button
+                                key={fmt.id}
+                                type="button"
+                                onClick={() => {
+                                  let updatedCat = editingProject.category;
+                                  if (fmt.id === '1920x1080' && updatedCat === 'Matchday') {
+                                    updatedCat = 'Artes 1920x1080';
+                                  } else if (fmt.id === '1350x1080' && updatedCat === 'Artes 1920x1080') {
+                                    updatedCat = 'Matchday';
+                                  }
+                                  setEditingProject({
+                                    ...editingProject,
+                                    aspectRatio: fmt.id,
+                                    category: updatedCat,
+                                  });
+                                }}
+                                className={`p-2.5 rounded-lg border text-left transition-all ${
+                                  isSelected
+                                    ? 'bg-white text-black border-white shadow-md'
+                                    : 'bg-[#141418] text-zinc-400 border-[#27272A] hover:border-zinc-500 hover:text-white'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="font-mono font-bold text-xs">{fmt.name}</span>
+                                  <span
+                                    className={`text-[9px] px-1 py-0.2 rounded font-mono ${
+                                      isSelected
+                                        ? 'bg-black text-white'
+                                        : 'bg-zinc-800 text-zinc-400'
+                                    }`}
+                                  >
+                                    {fmt.badge}
+                                  </span>
+                                </div>
+                                <p
+                                  className={`text-[10px] leading-tight ${
+                                    isSelected ? 'text-zinc-800 font-medium' : 'text-zinc-500'
+                                  }`}
+                                >
+                                  {fmt.sub}
+                                </p>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -925,32 +1142,44 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                     </div>
 
                     {/* Bottom Action buttons */}
-                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#27272A]">
-                      <button
-                        type="button"
-                        onClick={() => setEditingProject(null)}
-                        className="px-4 py-2.5 text-xs font-medium text-zinc-400 hover:text-white rounded-lg border border-zinc-800 hover:bg-zinc-900 transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleSaveProjectForm}
-                        disabled={isSaving || isOptimizingImage}
-                        className="px-6 py-2.5 text-xs font-semibold text-black bg-white hover:bg-zinc-200 rounded-lg transition-colors shadow-lg flex items-center gap-2 disabled:opacity-50"
-                      >
-                        {isSaving ? (
-                          <>
-                            <Loader2 className="w-4 h-4 text-black animate-spin" />
-                            <span>Sincronizando com a Nuvem...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Check className="w-4 h-4" />
-                            <span>Salvar & Sincronizar em Todos os Dispositivos</span>
-                          </>
-                        )}
-                      </button>
+                    <div className="flex items-center justify-between gap-3 pt-4 border-t border-[#27272A] flex-wrap">
+                      {!isCreatingNew && (
+                        <button
+                          type="button"
+                          onClick={() => setProjectToDelete({ id: editingProject.id, title: editingProject.title })}
+                          className="px-3.5 py-2 text-xs font-medium text-red-400 hover:text-red-300 rounded-lg border border-red-900/50 bg-red-950/20 hover:bg-red-950/40 transition-colors flex items-center gap-1.5"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Excluir Este Projeto</span>
+                        </button>
+                      )}
+                      <div className="flex items-center gap-3 ml-auto">
+                        <button
+                          type="button"
+                          onClick={() => setEditingProject(null)}
+                          className="px-4 py-2.5 text-xs font-medium text-zinc-400 hover:text-white rounded-lg border border-zinc-800 hover:bg-zinc-900 transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveProjectForm}
+                          disabled={isSaving || isOptimizingImage}
+                          className="px-6 py-2.5 text-xs font-semibold text-black bg-white hover:bg-zinc-200 rounded-lg transition-colors shadow-lg flex items-center gap-2 disabled:opacity-50"
+                        >
+                          {isSaving ? (
+                            <>
+                              <Loader2 className="w-4 h-4 text-black animate-spin" />
+                              <span>Sincronizando com a Nuvem...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-4 h-4" />
+                              <span>Salvar & Sincronizar em Todos os Dispositivos</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -987,12 +1216,20 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                             </div>
 
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400">
+                              <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 flex-wrap">
                                 <span>{proj.year}</span>
                                 <span>·</span>
-                                <span className="truncate">{proj.category}</span>
+                                <span className="text-zinc-200 font-semibold">{proj.category}</span>
+                                <span>·</span>
+                                <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[9px] text-zinc-300 border border-zinc-700">
+                                  {proj.aspectRatio === '1350x1080'
+                                    ? '1350×1080 (3 por fila)'
+                                    : proj.aspectRatio === '1920x1080'
+                                    ? '1920×1080 (4 por fila)'
+                                    : proj.aspectRatio || '4:3'}
+                                </span>
                               </div>
-                              <h4 className="font-display font-bold text-sm text-white truncate">
+                              <h4 className="font-display font-bold text-sm text-white truncate mt-0.5">
                                 {proj.title}
                               </h4>
                               <p className="text-xs text-zinc-400 truncate">
@@ -1200,6 +1437,93 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Custom In-App Delete Confirmation Modal (Iframe-safe, zero window.confirm) */}
+        {projectToDelete && (
+          <div className="fixed inset-0 z-[130] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-[#121216] border border-zinc-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+              <div className="flex items-center gap-3 text-red-400">
+                <div className="p-2.5 rounded-full bg-red-950/60 border border-red-800/40">
+                  <Trash2 className="w-5 h-5 text-red-400" />
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-white">Excluir Projeto</h4>
+                  <p className="text-xs text-zinc-400">Sincronização imediata na nuvem</p>
+                </div>
+              </div>
+
+              <p className="text-sm text-zinc-200 leading-relaxed">
+                Tem certeza que deseja apagar o projeto <strong className="text-white">"{projectToDelete.title}"</strong>?
+              </p>
+              <p className="text-xs text-zinc-400">
+                Esta ação removerá este trabalho de todos os navegadores e da galeria do portfólio.
+              </p>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setProjectToDelete(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-medium text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const target = projectToDelete;
+                    setProjectToDelete(null);
+                    await confirmDeleteProject(target.id, target.title);
+                  }}
+                  disabled={isSaving}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-500 transition-colors flex items-center gap-2 shadow-lg disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Sim, Excluir Definitivamente</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Custom In-App Reset Confirmation Modal */}
+        {showResetConfirm && (
+          <div className="fixed inset-0 z-[130] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-[#121216] border border-zinc-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+              <div className="flex items-center gap-3 text-amber-400">
+                <div className="p-2.5 rounded-full bg-amber-950/60 border border-amber-800/40">
+                  <RotateCcw className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-white">Restaurar Versão Padrão</h4>
+                  <p className="text-xs text-zinc-400">Redefinir projetos</p>
+                </div>
+              </div>
+
+              <p className="text-sm text-zinc-200 leading-relaxed">
+                Deseja restaurar os projetos padrão do portfólio? Todas as artes personalizadas serão substituídas.
+              </p>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setShowResetConfirm(false)}
+                  className="px-4 py-2 rounded-lg text-xs font-medium text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmResetToDefaults}
+                  disabled={isSaving}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 transition-colors flex items-center gap-2 shadow-lg disabled:opacity-50"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restaurar Padrão</span>
+                </button>
+              </div>
             </div>
           </div>
         )}

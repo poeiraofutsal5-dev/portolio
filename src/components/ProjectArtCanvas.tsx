@@ -12,7 +12,7 @@ export const ProjectArtCanvas: React.FC<ProjectArtCanvasProps> = ({
   project,
   className = '',
   isHovered = false,
-  fitMode = 'cover',
+  fitMode = project.fitMode || 'contain',
 }) => {
   // If user uploaded or specified a custom image for the project
   if (project.customImageUrl) {

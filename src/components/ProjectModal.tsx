@@ -62,10 +62,18 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
       <div className="relative z-10 w-full max-w-4xl max-h-[90vh] bg-[#0A0A0C] border border-[#27272A] rounded-2xl overflow-hidden flex flex-col shadow-2xl">
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#27272A] bg-[#0c0c0e]">
-          <div className="flex items-center gap-3 text-xs text-[#A1A1AA]">
+          <div className="flex items-center gap-3 text-xs text-[#A1A1AA] flex-wrap">
             <span className="font-mono text-[#F4F4F5]">{project.year}</span>
             <span aria-hidden="true">·</span>
-            <span>{project.category}</span>
+            <span className="text-zinc-200 font-semibold">{project.category}</span>
+            <span aria-hidden="true">·</span>
+            <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[10px] font-mono text-zinc-300">
+              {project.aspectRatio === '1350x1080'
+                ? '1350×1080'
+                : project.aspectRatio === '1920x1080'
+                ? '1920×1080'
+                : project.aspectRatio || '4:3'}
+            </span>
             <span aria-hidden="true">·</span>
             <span>{project.client}</span>
           </div>
