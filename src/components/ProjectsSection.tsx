@@ -420,7 +420,6 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({
              3. Embaixo de 1920x1080: Sites (separado de artes!)
              ================================================================== */
           <>
-            {/* 1ª FILA: ARTES 1350x1080 (3 POR FILA) */}
             {/* 1ª FILA: ARTES 1350x1080 (4 POR FILA) */}
             {artes1350List.length > 0 && (
               <div className="space-y-5">
@@ -430,9 +429,6 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({
                       MATCHDAYS & CARTAZES (1350×1080)
                     </h3>
                   </div>
-                  <span className="text-[11px] font-mono text-zinc-400 px-2.5 py-0.5 rounded-md bg-zinc-900 border border-zinc-800">
-                    4 por fila
-                  </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -457,9 +453,6 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({
                       <span>ARTES 1920×1080</span>
                     </h3>
                   </div>
-                  <span className="text-[11px] font-mono text-emerald-400 px-3 py-1 rounded-md bg-emerald-950/40 border border-emerald-900/60 font-medium">
-                    4 por fila · Vertical
-                  </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -484,9 +477,6 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({
                       <span>SITES & INTERFACES WEB</span>
                     </h3>
                   </div>
-                  <span className="text-[11px] font-mono text-blue-300 px-2.5 py-0.5 rounded-md bg-blue-950/40 border border-blue-900/50">
-                    4 por fila · Projetos Web
-                  </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -513,10 +503,6 @@ export const ProjectsSection: React.FC<ProjectsSectionProps> = ({
                   ({filteredList.length} {filteredList.length === 1 ? 'projeto' : 'projetos'})
                 </span>
               </h3>
-
-              <span className="text-[11px] font-mono text-zinc-400 px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800">
-                4 por fila · {selectedCategory}
-              </span>
             </div>
 
             {filteredList.length === 0 ? (
