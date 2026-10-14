@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Image as ImageIcon,
+  MessageCircle,
 } from 'lucide-react';
 
 interface ProjectModalProps {
@@ -360,20 +361,44 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
             )}
           </div>
 
-          {/* CTA Footer inside modal */}
-          <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+          {/* CTA Footer inside modal - Direciona para o WhatsApp (77) 98167-7054 */}
+          <div className="pt-3 border-t border-[#27272A] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <div>
               <p className="text-xs text-[#A1A1AA]">
                 Interessado em um projeto com esse nível de acabamento?
               </p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse" />
+                <span className="text-[11px] font-mono text-emerald-400 font-semibold">
+                  Atendimento direto no WhatsApp: (77) 98167-7054
+                </span>
+              </div>
             </div>
-            <button
-              onClick={handleStartSimilar}
-              className="px-5 py-2.5 rounded-xl bg-white text-black font-semibold text-xs hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2 shadow-lg cursor-pointer"
-            >
-              <span>Solicitar Orçamento Deste Tipo</span>
-              <ArrowUpRight className="w-4 h-4" />
-            </button>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <a
+                href={`https://wa.me/5577981677054?text=${encodeURIComponent(
+                  `Olá JPX Studio! Gostei muito do projeto "${project.title}" (${project.category || 'Design'}) e gostaria de solicitar um orçamento para um projeto nesse padrão.`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 cursor-pointer"
+                title="Abrir WhatsApp (77) 98167-7054"
+              >
+                <MessageCircle className="w-4 h-4 fill-black text-black" />
+                <span>Solicitar Orçamento no WhatsApp</span>
+                <ArrowUpRight className="w-4 h-4" />
+              </a>
+
+              <button
+                type="button"
+                onClick={handleStartSimilar}
+                className="px-3.5 py-2 rounded-xl bg-[#141418] hover:bg-[#1E1E24] text-zinc-300 hover:text-white border border-[#27272A] text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                title="Preencher briefing pelo formulário do site"
+              >
+                <span>Briefing no Site</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

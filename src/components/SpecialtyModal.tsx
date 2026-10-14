@@ -41,12 +41,15 @@ export const SpecialtyModal: React.FC<SpecialtyModalProps> = ({
     }
   };
 
-  const handleOpenWhatsApp = () => {
-    const text = encodeURIComponent(
-      `Olá JPX Studio! Tenho interesse no serviço de ${specialty.title}. Gostaria de solicitar um orçamento.`
-    );
-    window.open(`https://wa.me/5577991953930?text=${text}`, '_blank');
-  };
+  const whatsAppNumber = '5577981677054';
+
+  const startProjectWaUrl = `https://wa.me/${whatsAppNumber}?text=${encodeURIComponent(
+    `Olá JPX Studio! Gostaria de iniciar um projeto com a especialidade: ${specialty.title}.`
+  )}`;
+
+  const quoteWaUrl = `https://wa.me/${whatsAppNumber}?text=${encodeURIComponent(
+    `Olá JPX Studio! Tenho interesse no serviço de ${specialty.title}. Gostaria de solicitar um orçamento.`
+  )}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-fadeIn">
@@ -70,7 +73,7 @@ export const SpecialtyModal: React.FC<SpecialtyModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-[#A1A1AA] hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+            className="p-1.5 text-[#A1A1AA] hover:text-white rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
             aria-label="Fechar detalhes da especialidade"
           >
             <X className="w-5 h-5" />
@@ -166,21 +169,34 @@ export const SpecialtyModal: React.FC<SpecialtyModalProps> = ({
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="pt-4 border-t border-[#27272A] flex flex-col sm:flex-row items-center gap-3">
+          {/* Action Buttons - Ambos direcionam para o WhatsApp 77981677054 */}
+          <div className="pt-4 border-t border-[#27272A] space-y-2">
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <a
+                href={startProjectWaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:flex-1 py-3 px-5 bg-white text-black font-semibold text-xs sm:text-sm rounded-xl hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+              >
+                <span>Iniciar Projeto com este Serviço</span>
+                <ArrowUpRight className="w-4 h-4" />
+              </a>
+              <a
+                href={quoteWaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:w-auto py-3 px-5 bg-emerald-600/25 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/40 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-lg"
+              >
+                <MessageCircle className="w-4 h-4 text-emerald-400" />
+                <span>Orçamento WhatsApp</span>
+              </a>
+            </div>
             <button
+              type="button"
               onClick={handleStartProject}
-              className="w-full sm:flex-1 py-3 px-5 bg-white text-black font-semibold text-xs sm:text-sm rounded-xl hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2 shadow-lg"
+              className="text-[11px] text-zinc-400 hover:text-white transition-colors underline underline-offset-4 mx-auto block pt-1 cursor-pointer"
             >
-              <span>Iniciar Projeto com este Serviço</span>
-              <ArrowUpRight className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleOpenWhatsApp}
-              className="w-full sm:w-auto py-3 px-4 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span>Orçamento WhatsApp</span>
+              Ou preencher formulário detalhado no site
             </button>
           </div>
         </div>

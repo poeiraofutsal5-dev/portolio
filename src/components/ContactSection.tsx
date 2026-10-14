@@ -49,16 +49,15 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
     }
     setIsSubmitting(true);
 
-    // Format briefing for WhatsApp
+    // Format briefing for WhatsApp (77) 98167-7054
     const waText = `Olá JPXSTUDIO! Gostaria de conversar sobre um projeto:\n\n*Nome:* ${name}\n*E-mail:* ${email}\n*Tipo de Projeto:* ${projectType}\n*Investimento Estimado:* ${budget || 'A combinar'}${message ? `\n\n*Detalhes do Projeto:*\n${message}` : ''}`;
     const waUrl = `https://wa.me/5577981677054?text=${encodeURIComponent(waText)}`;
 
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setIsSubmitted(true);
-      onShowToast('Abrindo WhatsApp com seu projeto...');
-      window.open(waUrl, '_blank');
-    }, 400);
+    setIsSubmitting(false);
+    setIsSubmitted(true);
+    onShowToast('Abrindo WhatsApp (77) 98167-7054...');
+    // Direct navigation is guaranteed to open WhatsApp on mobile & desktop without popup block
+    window.location.href = waUrl;
   };
 
   return (

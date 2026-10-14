@@ -76,12 +76,15 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Zone 3: 1 Primary Action (Iniciar Projeto) + Cadeado Cinza */}
         <div className="hidden sm:flex items-center gap-2.5 shrink-0">
-          <button
-            onClick={() => scrollTo('contato')}
-            className="px-4 py-2 text-xs font-semibold text-black bg-white rounded-lg hover:bg-zinc-200 transition-colors whitespace-nowrap shrink-0"
+          <a
+            href="https://wa.me/5577981677054?text=Ol%C3%A1%20JPX%20Studio!%20Gostaria%20de%20iniciar%20um%20projeto."
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 text-xs font-semibold text-black bg-white rounded-lg hover:bg-zinc-200 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer shadow-sm"
+            title="Falar no WhatsApp (77) 98167-7054"
           >
             Iniciar Projeto
-          </button>
+          </a>
           <button
             onClick={onOpenAdmin}
             className="relative p-2 text-zinc-400 hover:text-white rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-900/80 hover:bg-zinc-800 transition-colors group shrink-0"
@@ -151,12 +154,15 @@ export const Header: React.FC<HeaderProps> = ({
             Contato
           </button>
           <div className="pt-4 border-t border-[#27272A] flex items-center gap-2">
-            <button
-              onClick={() => scrollTo('contato')}
-              className="flex-1 py-2.5 text-xs font-semibold text-center text-black bg-white rounded-lg"
+            <a
+              href="https://wa.me/5577981677054?text=Ol%C3%A1%20JPX%20Studio!%20Gostaria%20de%20iniciar%20um%20projeto."
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex-1 py-2.5 text-xs font-semibold text-center text-black bg-white rounded-lg flex items-center justify-center gap-1.5"
             >
-              Iniciar Projeto
-            </button>
+              Iniciar Projeto (WhatsApp)
+            </a>
             <button
               onClick={() => {
                 setMobileMenuOpen(false);

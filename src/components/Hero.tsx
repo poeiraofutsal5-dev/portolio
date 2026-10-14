@@ -1,5 +1,13 @@
-import React from 'react';
-import { ArrowDown, ArrowUpRight, Sparkles, Image as ImageIcon } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {
+  ArrowDown,
+  ArrowUpRight,
+  Sparkles,
+  Image as ImageIcon,
+  ChevronLeft,
+  ChevronRight,
+  MessageCircle,
+} from 'lucide-react';
 import { Project, getProjectImages } from '../types';
 import { JPX_PROJECTS } from '../data/portfolioData';
 import { ProjectArtCanvas } from './ProjectArtCanvas';
@@ -19,10 +27,8 @@ export const Hero: React.FC<HeroProps> = ({
   onScrollToContact,
   onOpenProject,
 }) => {
-  const featuredProject = projects[0] || JPX_PROJECTS[0];
-
   // Artes para o fundo destacado no celular (2 colunas, como na Imagem 2)
-  const mobileBgProjects = React.useMemo(() => {
+  const mobileBgProjects = useMemo(() => {
     if (!projects || projects.length === 0) return JPX_PROJECTS;
     let list = [...projects];
     while (list.length < 6) {
@@ -30,6 +36,33 @@ export const Hero: React.FC<HeroProps> = ({
     }
     return list.slice(0, 6);
   }, [projects]);
+
+  // Desktop PC: projetos de artes verticais (priorizando artes 1920x1080 para formato retangular alto igual aos trabalhos)
+  const desktopArts = useMemo(() => {
+    if (!projects || projects.length === 0) return JPX_PROJECTS;
+    const artes1920 = projects.filter(
+      (p) => p.aspectRatio === '1920x1080' || p.category === 'Artes 1920x1080'
+    );
+    const matchdays = projects.filter(
+      (p) => !artes1920.some((a) => a.id === p.id) && p.category !== 'Site'
+    );
+    const sites = projects.filter((p) => p.category === 'Site');
+    const ordered = [...artes1920, ...matchdays, ...sites];
+    return ordered.length > 0 ? ordered : JPX_PROJECTS;
+  }, [projects]);
+
+  const [desktopArtIndex, setDesktopArtIndex] = useState(0);
+  const currentDesktopProject = desktopArts[desktopArtIndex] || desktopArts[0] || JPX_PROJECTS[0];
+
+  const handlePrevDesktopArt = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDesktopArtIndex((prev) => (prev > 0 ? prev - 1 : desktopArts.length - 1));
+  };
+
+  const handleNextDesktopArt = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDesktopArtIndex((prev) => (prev < desktopArts.length - 1 ? prev + 1 : 0));
+  };
 
   return (
     <section className="relative pt-3 pb-8 md:pt-12 md:pb-16 px-3 sm:px-6 lg:px-8 max-w-7xl mx-auto overflow-hidden">
@@ -62,7 +95,7 @@ export const Hero: React.FC<HeroProps> = ({
         <div className="absolute inset-0 bg-gradient-to-b from-[#050505]/85 via-black/45 to-[#050505] pointer-events-none" />
         <div className="absolute inset-0 bg-black/30 pointer-events-none" />
 
-        {/* Nome do estúdio no centro (como 'Jordan Studio' na Imagem 2) */}
+        {/* Nome do estúdio no centro */}
         <div className="relative z-10 flex flex-col items-center justify-center p-6 text-center pointer-events-none">
           {customLogoUrl ? (
             <img
@@ -88,7 +121,7 @@ export const Hero: React.FC<HeroProps> = ({
       </div>
 
       {/* ==============================================================
-          DESKTOP-ONLY HERO (100% INTACTO E PRESERVADO PARA PC)
+          DESKTOP-ONLY HERO (RETÂNGULO VERTICAL 1080×1920 IGUAL AOS TRABALHOS)
           ============================================================== */}
       <div className="hidden md:flex flex-col justify-between min-h-[85vh]">
         {/* Background Subtle Architectural Grid & Glow */}
@@ -121,7 +154,7 @@ export const Hero: React.FC<HeroProps> = ({
               </p>
             </div>
 
-            {/* Action CTAs & Quick Micro-Navigation */}
+            {/* Action CTAs & Quick Micro-Navigation - Direto para WhatsApp (77) 98167-7054 */}
             <div className="pt-2 flex flex-wrap items-center gap-4">
               <button
                 onClick={onScrollToProjects}
@@ -130,38 +163,36 @@ export const Hero: React.FC<HeroProps> = ({
                 <span>Explorar Trabalhos</span>
                 <ArrowDown className="w-4 h-4" />
               </button>
-              <button
-                onClick={onScrollToContact}
-                className="inline-flex items-center gap-2 px-6 py-3.5 bg-[#121215] text-white border border-[#27272A] font-sans font-medium text-xs rounded-lg hover:border-zinc-500 transition-colors"
+              <a
+                href="https://wa.me/5577981677054?text=Ol%C3%A1%20JPX%20Studio!%20Gostaria%20de%20iniciar%20um%20projeto."
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-6 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-black font-sans font-bold text-xs rounded-lg transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
+                title="Falar direto no WhatsApp (77) 98167-7054"
               >
-                <span>Iniciar Projeto</span>
+                <MessageCircle className="w-4 h-4 fill-black text-black" />
+                <span>Iniciar no WhatsApp</span>
                 <ArrowUpRight className="w-4 h-4" />
-              </button>
+              </a>
             </div>
           </div>
 
-          {/* Right Column: Featured Studio Visual Card - Formato Vertical Proporcional Igual aos Trabalhos */}
+          {/* Right Column: Featured Studio Visual Card - FORMATO VERTICAL 1080×1920 IGUAL AOS TRABALHOS (SEM FORMATO QUADRADO!) */}
           <div className="lg:col-span-5 flex justify-center lg:justify-end">
             {(() => {
-              const featImages = getProjectImages(featuredProject);
-              const featActiveImage = featImages[0] || featuredProject.customImageUrl;
-              const isCover = featuredProject.fitMode !== 'contain';
-              const is1920 = featuredProject.aspectRatio === '1920x1080';
-              const is1350 = featuredProject.aspectRatio === '1350x1080';
-              const aspectStyle = is1920
-                ? { aspectRatio: '1080 / 1920' }
-                : is1350
-                ? { aspectRatio: '1080 / 1350' }
-                : { aspectRatio: '1080 / 1920' };
+              const project = currentDesktopProject;
+              const featImages = getProjectImages(project);
+              const featActiveImage = featImages[0] || project.customImageUrl;
+              const isContain = project.fitMode === 'contain';
 
               return (
                 <div
-                  onClick={() => onOpenProject(featuredProject)}
-                  className="group relative cursor-pointer w-full max-w-[310px] xl:max-w-[340px] rounded-2xl overflow-hidden border border-[#27272A] bg-[#0A0A0C] hover:border-emerald-400/60 hover:shadow-2xl hover:shadow-emerald-950/40 transition-all duration-300 flex flex-col justify-between shadow-2xl select-none"
+                  onClick={() => onOpenProject(project)}
+                  className="group relative cursor-pointer w-full max-w-[275px] xl:max-w-[305px] rounded-2xl overflow-hidden border border-[#27272A] bg-[#0A0A0C] hover:border-emerald-400/60 hover:shadow-2xl hover:shadow-emerald-950/40 transition-all duration-300 flex flex-col justify-between shadow-2xl select-none"
                 >
-                  {/* Retângulo Vertical no mesmo estilo dos trabalhos */}
+                  {/* Retângulo Vertical no mesmo estilo 1080×1920 dos trabalhos (Formato de Cartaz / Flyer Alto) */}
                   <div
-                    style={aspectStyle}
+                    style={{ aspectRatio: '1080 / 1920' }}
                     className="w-full bg-[#0A0A0C] overflow-hidden relative flex items-center justify-center border-b border-zinc-900 select-none"
                   >
                     {featActiveImage ? (
@@ -174,25 +205,27 @@ export const Hero: React.FC<HeroProps> = ({
                         <div className="absolute inset-0 bg-black/25 pointer-events-none" aria-hidden="true" />
                         <img
                           src={featActiveImage}
-                          alt={featuredProject.title}
+                          alt={project.title}
                           className={`relative z-10 w-full h-full ${
-                            isCover ? 'object-cover' : 'object-contain'
+                            isContain ? 'object-contain' : 'object-cover'
                           } transition-transform duration-500 group-hover:scale-105 drop-shadow-xl`}
                         />
                       </>
                     ) : (
-                      <ProjectArtCanvas project={featuredProject} isHovered={true} />
+                      <ProjectArtCanvas project={project} isHovered={true} />
                     )}
 
-                    {/* Badge de Formato no Topo Esquerdo */}
+                    {/* Badge 1920x1080 evidente no Topo Esquerdo */}
                     <div className="absolute top-3 left-3 z-20 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md border border-emerald-500/40 text-[10px] font-mono text-emerald-400 flex items-center gap-1 shadow-lg">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse" />
                       <span className="font-semibold tracking-wide">
-                        {is1920 ? '1920×1080' : is1350 ? '1350×1080' : featuredProject.aspectRatio || '1920×1080'}
+                        {project.aspectRatio === '1920x1080'
+                          ? '1920×1080'
+                          : project.aspectRatio || '1920×1080'}
                       </span>
                     </div>
 
-                    {/* Badge de Múltiplas Imagens se houver mais de 1 */}
+                    {/* Badge de Múltiplas Imagens deste projeto */}
                     {featImages.length > 1 && (
                       <div className="absolute top-3 right-3 z-20 px-1.5 py-0.5 rounded bg-black/85 backdrop-blur-md border border-white/20 text-[9px] font-mono text-zinc-200 flex items-center gap-1 shadow-md">
                         <ImageIcon className="w-2.5 h-2.5 text-emerald-400" />
@@ -200,27 +233,53 @@ export const Hero: React.FC<HeroProps> = ({
                       </div>
                     )}
 
+                    {/* Botões para alternar trabalho na prévia do PC */}
+                    {desktopArts.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handlePrevDesktopArt}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 z-30 p-2 rounded-full bg-black/80 hover:bg-black text-white border border-white/20 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-xl cursor-pointer"
+                          title="Trabalho anterior"
+                          aria-label="Trabalho anterior"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleNextDesktopArt}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 z-30 p-2 rounded-full bg-black/80 hover:bg-black text-white border border-white/20 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-xl cursor-pointer"
+                          title="Próximo trabalho"
+                          aria-label="Próximo trabalho"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+
                     {/* Hover Action Circle */}
-                    <div className="hidden sm:flex absolute top-3 right-3 w-8 h-8 rounded-full bg-black/80 backdrop-blur-md border border-white/20 items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all transform group-hover:scale-110 z-20 shadow-xl">
+                    <div className="hidden sm:flex absolute bottom-3 right-3 w-8 h-8 rounded-full bg-black/80 backdrop-blur-md border border-white/20 items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all transform group-hover:scale-110 z-20 shadow-xl">
                       <ArrowUpRight className="w-4 h-4" />
                     </div>
                   </div>
 
-                  {/* Informações da Arte no Rodapé do Card (Idêntico aos Trabalhos) */}
-                  <div className="p-4 bg-[#0A0A0C]">
-                    <div className="flex items-center gap-2 text-xs text-[#A1A1AA] mb-1.5 truncate">
-                      <span className="font-mono text-white text-[11px]">{featuredProject.year}</span>
+                  {/* Informações da Arte no Rodapé do Card (Idêntico ao Card1920 dos Trabalhos) */}
+                  <div className="p-3.5 bg-[#0A0A0C]">
+                    <div className="flex items-center gap-2 text-xs text-[#A1A1AA] mb-1 truncate">
+                      <span className="font-mono text-white text-[10px]">{project.year}</span>
                       <span aria-hidden="true" className="text-zinc-600">·</span>
                       <span className="px-1.5 py-0.2 rounded bg-emerald-950/60 border border-emerald-900/50 text-[9px] font-semibold text-emerald-300 uppercase tracking-wider truncate">
-                        {featuredProject.category || 'Artes 1920x1080'}
+                        {project.category || '1920×1080'}
                       </span>
                     </div>
-                    <h3 className="font-display font-bold text-base text-white group-hover:text-emerald-400 transition-colors truncate leading-tight">
-                      {featuredProject.title}
+                    <h3 className="font-display font-bold text-sm text-white group-hover:text-emerald-400 transition-colors truncate leading-tight">
+                      {project.title}
                     </h3>
-                    <p className="mt-1 text-xs text-[#A1A1AA] line-clamp-2">
-                      {featuredProject.tagline || featuredProject.description || 'Descrição curta de impacto visual e posicionamento da arte.'}
-                    </p>
+                    {project.tagline && (
+                      <p className="mt-1 text-[11px] text-[#A1A1AA] line-clamp-2">
+                        {project.tagline}
+                      </p>
+                    )}
                   </div>
                 </div>
               );
