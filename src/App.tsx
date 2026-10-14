@@ -182,6 +182,13 @@ export default function App() {
   const handleSaveProjects = async (updatedProjects: Project[]): Promise<boolean> => {
     setProjects(updatedProjects);
     projectsRef.current = updatedProjects;
+
+    // Immediately sync selectedProject if open
+    setSelectedProject((prev) => {
+      if (!prev) return null;
+      return updatedProjects.find((p) => p.id === prev.id) || prev;
+    });
+
     try {
       localStorage.setItem('jpx_custom_projects_v1', JSON.stringify(updatedProjects));
     } catch (err) {
@@ -261,6 +268,7 @@ export default function App() {
         {/* Hero Section */}
         <Hero
           projects={projects}
+          customLogoUrl={footerLogo}
           onScrollToProjects={() => scrollToSection('projetos')}
           onScrollToContact={() => scrollToSection('contato')}
           onOpenProject={handleOpenProject}
@@ -273,7 +281,10 @@ export default function App() {
         />
 
         {/* About & Specialties Section */}
-        <AboutSection onSelectSpecialtyForContact={handleSelectSpecialtyForContact} />
+        <AboutSection
+          onSelectSpecialtyForContact={handleSelectSpecialtyForContact}
+          onShowToast={showToast}
+        />
 
         {/* Contact Section ("Vamos trabalhar juntos?" + Briefing WhatsApp Form + Socials) */}
         <ContactSection

@@ -62,8 +62,8 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
   };
 
   return (
-    <section id="contato" className="py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-[#27272A]">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16">
+    <section id="contato" className="py-12 md:py-24 px-3 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-[#27272A]">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-16">
         {/* Left Column: Direct Contact & Big Typography Headline */}
         <div className="lg:col-span-6 space-y-8 flex flex-col justify-between">
           <div>
@@ -86,8 +86,8 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
             </p>
           </div>
 
-          {/* Direct Contact Cards */}
-          <div className="space-y-4 pt-4">
+          {/* Direct Contact Cards & Socials - SOMENTE NO PC (Oculto no celular conforme solicitado) */}
+          <div className="hidden lg:block space-y-4 pt-4">
             {/* 1-Click Copy Email Card */}
             <div className="p-5 bg-[#0A0A0C] border border-[#27272A] rounded-xl flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -176,8 +176,9 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Interactive Briefing / Inquiry Form */}
-        <div className="lg:col-span-6 bg-[#0A0A0C] border border-[#27272A] rounded-xl p-6 sm:p-8">
+        {/* Right Column: Interactive Briefing / Inquiry Form & Mobile Socials */}
+        <div className="lg:col-span-6 space-y-5">
+          <div className="bg-[#0A0A0C] border border-[#27272A] rounded-xl p-5 sm:p-8">
           <div className="flex items-center justify-between pb-6 border-b border-[#27272A]">
             <div>
               <h3 className="font-display font-bold text-xl text-white">
@@ -320,7 +321,42 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
             </form>
           )}
         </div>
+
+        {/* Redes Sociais no Celular (Embaixo do Formulário) */}
+        <div className="lg:hidden p-4 sm:p-5 bg-[#0A0A0C] border border-[#27272A] rounded-xl space-y-3">
+          <div className="text-[11px] font-mono uppercase text-[#71717A]">
+            Redes & Presença Digital
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2.5">
+            <a
+              href="https://www.instagram.com/jpxstudio9/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-between px-4 py-2.5 bg-[#121215] border border-[#27272A] rounded-lg text-xs font-medium text-white hover:border-zinc-500 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Instagram className="w-4 h-4 text-pink-400" />
+                <span>Instagram @jpxstudio9</span>
+              </div>
+              <ExternalLink className="w-3 h-3 text-[#71717A]" />
+            </a>
+
+            <a
+              href="https://wa.me/5577981677054"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-between px-4 py-2.5 bg-[#121215] border border-[#27272A] rounded-lg text-xs font-medium text-white hover:border-emerald-500 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-emerald-400" />
+                <span>WhatsApp (77) 98167-7054</span>
+              </div>
+              <ExternalLink className="w-3 h-3 text-[#71717A]" />
+            </a>
+          </div>
+        </div>
       </div>
-    </section>
+    </div>
+  </section>
   );
 };

@@ -112,16 +112,38 @@ export function broadcastLocalSync(data: StudioConfigPayload) {
 export async function sanitizeAndCompressProjects(projects: Project[]): Promise<Project[]> {
   const result: Project[] = [];
   for (const p of projects) {
-    if (p.customImageUrl && p.customImageUrl.startsWith('data:image/') && p.customImageUrl.length > 110000) {
-      try {
-        const compressed = await compressDataUrl(p.customImageUrl, 1280, 1280, 0.78);
-        result.push({ ...p, customImageUrl: compressed });
-      } catch {
-        result.push(p);
+    // Gather all valid images from either images array or customImageUrl
+    const rawImages = (
+      p.images && Array.isArray(p.images) && p.images.length > 0
+        ? p.images
+        : p.customImageUrl
+        ? [p.customImageUrl]
+        : []
+    ).filter((img): img is string => typeof img === 'string' && img.trim().length > 0);
+
+    const compressedImages: string[] = [];
+    for (const imgUrl of rawImages) {
+      if (imgUrl.startsWith('data:image/') && imgUrl.length > 110000) {
+        try {
+          const compressed = await compressDataUrl(imgUrl, 1280, 1280, 0.78);
+          compressedImages.push(compressed);
+        } catch {
+          compressedImages.push(imgUrl);
+        }
+      } else {
+        compressedImages.push(imgUrl);
       }
-    } else {
-      result.push(p);
     }
+
+    const updatedProject: Project = {
+      ...p,
+      images: compressedImages,
+      customImageUrl: compressedImages[0] || p.customImageUrl || '',
+      fitMode: p.fitMode || 'cover',
+      aspectRatio: p.aspectRatio || '1350x1080',
+    };
+
+    result.push(updatedProject);
   }
   return result;
 }
@@ -248,8 +270,11 @@ export async function saveStudioConfigToFirebase(
     updatedAt: new Date().toISOString(),
   };
 
+  // Strip any accidental undefined fields that Firestore rejects
+  const sanitizedPayload = JSON.parse(JSON.stringify(payload));
+
   // 2. If projects payload exceeds 650 KB, partition into multiple documents so storage is never blocked
-  const estimatedSize = JSON.stringify(payload).length;
+  const estimatedSize = JSON.stringify(sanitizedPayload).length;
   try {
     if (estimatedSize > 650000 && cleanProjects.length > 1) {
       const mid = Math.ceil(cleanProjects.length / 2);
@@ -257,21 +282,21 @@ export async function saveStudioConfigToFirebase(
       const overflowProjects = cleanProjects.slice(mid);
 
       // Write overflow chunk
-      await setDoc(overflowRef, {
+      await setDoc(overflowRef, JSON.parse(JSON.stringify({
         projects: overflowProjects,
         updatedAt: new Date().toISOString(),
-      });
+      })));
 
       // Write primary chunk
-      await setDoc(docRef, {
+      await setDoc(docRef, JSON.parse(JSON.stringify({
         projects: primaryProjects,
         footerLogo: footerLogo ?? null,
         footerLogoHeight,
         hasOverflow: true,
         updatedAt: new Date().toISOString(),
-      });
+      })));
     } else {
-      await setDoc(docRef, payload);
+      await setDoc(docRef, sanitizedPayload);
     }
 
     // Broadcast locally to any other open tabs immediately

@@ -18,11 +18,17 @@ import {
   EyeOff,
   Copy,
   ChevronLeft,
+  ChevronRight,
+  Star,
+  ArrowLeft,
+  ArrowRight,
+  Layers,
   Sparkles,
   AlertCircle,
   Loader2,
   CloudCheck,
 } from 'lucide-react';
+import { getProjectImages } from '../types';
 import { optimizeImageFile, optimizeLogoFile } from '../lib/imageOptimizer';
 
 interface AdminEditorModalProps {
@@ -93,6 +99,10 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
   const [newDeliverable, setNewDeliverable] = useState('');
   const [newColorHex, setNewColorHex] = useState('#FFFFFF');
 
+  // Multi-image management state
+  const [activeImagePreviewIndex, setActiveImagePreviewIndex] = useState(0);
+  const [newImageUrlInput, setNewImageUrlInput] = useState('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -136,64 +146,166 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
     onShowToast('Sessão encerrada.');
   };
 
-  // Upload and compress image file for project
+  // Upload and compress image file(s) for project - supports multiple files
   const handleProjectImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && editingProject) {
-      try {
-        setIsOptimizingImage(true);
-        onShowToast('Otimizando arte em alta definição...');
+    const files = e.target.files;
+    if (!files || files.length === 0 || !editingProject) return;
+
+    try {
+      setIsOptimizingImage(true);
+      const existingImages = [
+        ...(editingProject.images && editingProject.images.length > 0
+          ? editingProject.images
+          : editingProject.customImageUrl
+          ? [editingProject.customImageUrl]
+          : [])
+      ];
+
+      const newOptimizedImages: string[] = [];
+      let detectedFormat = editingProject.aspectRatio || '1350x1080';
+      let suggestedCategory = editingProject.category;
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        onShowToast(`Otimizando imagem ${i + 1} de ${files.length}...`);
         const optimized = await optimizeImageFile(file);
-        const approxKb = Math.round(optimized.length / 1024);
+        newOptimizedImages.push(optimized);
 
-        // Auto-detect image dimensions to suggest format and category
-        let detectedFormat = editingProject.aspectRatio || '1350x1080';
-        let suggestedCategory = editingProject.category;
-
-        try {
-          const img = new Image();
-          img.src = optimized;
-          await new Promise((resolve) => {
-            img.onload = resolve;
-            img.onerror = resolve;
-          });
-          if (img.naturalWidth && img.naturalHeight) {
-            const ratio = img.naturalWidth / img.naturalHeight;
-            if (ratio >= 1.15) {
-              detectedFormat = '1920x1080';
-              suggestedCategory = editingProject.category === 'Site' ? 'Site' : 'Artes 1920x1080';
-            } else if (ratio <= 0.95) {
-              detectedFormat = '1350x1080';
-              suggestedCategory = 'Matchday';
+        // Auto-detect image dimensions on first image if project has no images yet
+        if (existingImages.length === 0 && i === 0) {
+          try {
+            const img = new Image();
+            img.src = optimized;
+            await new Promise((resolve) => {
+              img.onload = resolve;
+              img.onerror = resolve;
+            });
+            if (img.naturalWidth && img.naturalHeight) {
+              const ratio = img.naturalWidth / img.naturalHeight;
+              if (ratio >= 1.15) {
+                detectedFormat = '1920x1080';
+                suggestedCategory = editingProject.category === 'Site' ? 'Site' : 'Artes 1920x1080';
+              } else if (ratio <= 0.95) {
+                detectedFormat = '1350x1080';
+                suggestedCategory = 'Matchday';
+              }
             }
+          } catch {
+            // ignore detection error
           }
-        } catch {
-          // ignore detection error
         }
-
-        setEditingProject({
-          ...editingProject,
-          customImageUrl: optimized,
-          aspectRatio: detectedFormat,
-          category: suggestedCategory,
-        });
-
-        const fmtName =
-          detectedFormat === '1350x1080'
-            ? '1350×1080 (3 por fila)'
-            : detectedFormat === '1920x1080'
-            ? '1920×1080 (4 por fila)'
-            : detectedFormat;
-
-        onShowToast(`Arte otimizada (~${approxKb} KB) · Formato ${fmtName}!`);
-      } catch (err) {
-        console.error('Erro ao otimizar imagem:', err);
-        onShowToast('Erro ao processar imagem.');
-      } finally {
-        setIsOptimizingImage(false);
-        e.target.value = '';
       }
+
+      const combinedImages = [...existingImages, ...newOptimizedImages];
+      setEditingProject({
+        ...editingProject,
+        images: combinedImages,
+        customImageUrl: combinedImages[0] || '',
+        aspectRatio: detectedFormat,
+        category: suggestedCategory,
+      });
+
+      setActiveImagePreviewIndex(combinedImages.length - 1);
+
+      onShowToast(
+        files.length === 1
+          ? 'Imagem adicionada ao trabalho com sucesso!'
+          : `${files.length} novas imagens adicionadas ao trabalho!`
+      );
+    } catch (err) {
+      console.error('Erro ao otimizar imagem:', err);
+      onShowToast('Erro ao processar imagem.');
+    } finally {
+      setIsOptimizingImage(false);
+      e.target.value = '';
     }
+  };
+
+  // Add image by direct URL
+  const handleAddImageUrl = () => {
+    if (!editingProject || !newImageUrlInput.trim()) return;
+    const url = newImageUrlInput.trim();
+    const existingImages = [
+      ...(editingProject.images && editingProject.images.length > 0
+        ? editingProject.images
+        : editingProject.customImageUrl
+        ? [editingProject.customImageUrl]
+        : [])
+    ];
+    const combined = [...existingImages, url];
+    setEditingProject({
+      ...editingProject,
+      images: combined,
+      customImageUrl: combined[0] || '',
+    });
+    setActiveImagePreviewIndex(combined.length - 1);
+    setNewImageUrlInput('');
+    onShowToast('Imagem adicionada à galeria!');
+  };
+
+  // Remove specific image by index
+  const handleRemoveImageAtIndex = (idxToRemove: number) => {
+    if (!editingProject) return;
+    const currentImages = [
+      ...(editingProject.images && editingProject.images.length > 0
+        ? editingProject.images
+        : editingProject.customImageUrl
+        ? [editingProject.customImageUrl]
+        : [])
+    ];
+    const updated = currentImages.filter((_, i) => i !== idxToRemove);
+    setEditingProject({
+      ...editingProject,
+      images: updated,
+      customImageUrl: updated[0] || '',
+    });
+    if (activeImagePreviewIndex >= updated.length) {
+      setActiveImagePreviewIndex(Math.max(0, updated.length - 1));
+    }
+    onShowToast('Imagem removida do trabalho.');
+  };
+
+  // Set image as cover (position 0)
+  const handleSetCoverImage = (idx: number) => {
+    if (!editingProject) return;
+    const currentImages = [
+      ...(editingProject.images && editingProject.images.length > 0
+        ? editingProject.images
+        : editingProject.customImageUrl
+        ? [editingProject.customImageUrl]
+        : [])
+    ];
+    if (idx <= 0 || idx >= currentImages.length) return;
+    const [selected] = currentImages.splice(idx, 1);
+    currentImages.unshift(selected);
+    setEditingProject({
+      ...editingProject,
+      images: currentImages,
+      customImageUrl: currentImages[0] || '',
+    });
+    setActiveImagePreviewIndex(0);
+    onShowToast('Imagem definida como Capa principal!');
+  };
+
+  // Move image position (reorder)
+  const handleMoveImage = (fromIdx: number, toIdx: number) => {
+    if (!editingProject) return;
+    const currentImages = [
+      ...(editingProject.images && editingProject.images.length > 0
+        ? editingProject.images
+        : editingProject.customImageUrl
+        ? [editingProject.customImageUrl]
+        : [])
+    ];
+    if (toIdx < 0 || toIdx >= currentImages.length) return;
+    const [item] = currentImages.splice(fromIdx, 1);
+    currentImages.splice(toIdx, 0, item);
+    setEditingProject({
+      ...editingProject,
+      images: currentImages,
+      customImageUrl: currentImages[0] || '',
+    });
+    setActiveImagePreviewIndex(toIdx);
   };
 
   // Upload and compress image file for footer logo
@@ -225,12 +337,26 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
       return;
     }
 
+    const currentImages = (
+      editingProject.images && editingProject.images.length > 0
+        ? editingProject.images
+        : editingProject.customImageUrl
+        ? [editingProject.customImageUrl]
+        : []
+    ).filter(Boolean);
+
+    const projectToSave: Project = {
+      ...editingProject,
+      images: currentImages,
+      customImageUrl: currentImages[0] || '',
+    };
+
     let updatedList: Project[];
-    if (isCreatingNew) {
-      updatedList = [editingProject, ...projects];
+    if (isCreatingNew || !projects.some((p) => p.id === projectToSave.id)) {
+      updatedList = [projectToSave, ...projects.filter((p) => p.id !== projectToSave.id)];
     } else {
       updatedList = projects.map((p) =>
-        p.id === editingProject.id ? editingProject : p
+        p.id === projectToSave.id ? projectToSave : p
       );
     }
 
@@ -239,7 +365,9 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
       await onSaveProjects(updatedList);
       setEditingProject(null);
       setIsCreatingNew(false);
-      onShowToast(`Projeto "${editingProject.title}" sincronizado na nuvem!`);
+      onShowToast(
+        `Projeto "${projectToSave.title}" salvo com ${currentImages.length} imagem(ns)!`
+      );
     } catch (err: any) {
       onShowToast(err?.message || 'Erro ao sincronizar com a nuvem.');
     } finally {
@@ -275,6 +403,11 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
       ...project,
       id: `${project.id}-copy-${Date.now()}`,
       title: `${project.title} (Cópia)`,
+      images: project.images
+        ? [...project.images]
+        : project.customImageUrl
+        ? [project.customImageUrl]
+        : [],
     };
     try {
       setIsSaving(true);
@@ -363,8 +496,11 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
       featured: false,
       themeColor: '#FFFFFF',
       customImageUrl: '',
+      images: [],
     };
     setEditingProject(newProj);
+    setActiveImagePreviewIndex(0);
+    setNewImageUrlInput('');
     setIsCreatingNew(true);
   };
 
@@ -595,183 +731,391 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Section 1: Image / Visual Cover */}
-                    <div className="p-5 rounded-xl border border-[#27272A] bg-[#0E0E12] space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-display font-bold text-sm text-white">
-                            Imagem do Projeto (Capa / Visual)
-                          </h4>
-                          <p className="text-xs text-[#A1A1AA]">
-                            Faça upload de uma foto/render do seu computador ou informe um link direto.
-                          </p>
-                        </div>
-                      </div>
+                    {/* Section 1: Image / Visual Cover & Multi-Image Gallery */}
+                    {(() => {
+                      const currentImages = (
+                        editingProject.images && editingProject.images.length > 0
+                          ? editingProject.images
+                          : editingProject.customImageUrl
+                          ? [editingProject.customImageUrl]
+                          : []
+                      ).filter(Boolean);
+                      const safeActivePreviewIndex = Math.min(
+                        activeImagePreviewIndex,
+                        Math.max(0, currentImages.length - 1)
+                      );
+                      const activeImageUrl = currentImages[safeActivePreviewIndex];
 
-                      {/* Image Preview & Upload Controls */}
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                        <div
-                          style={{
-                            aspectRatio:
-                              editingProject.aspectRatio === '1920x1080'
-                                ? '1080 / 1920'
-                                : editingProject.aspectRatio === '1350x1080'
-                                ? '1080 / 1350'
-                                : editingProject.aspectRatio === '1080x1080'
-                                ? '1 / 1'
-                                : '1080 / 1920',
-                          }}
-                          className="md:col-span-5 max-h-[360px] w-full rounded-xl overflow-hidden border border-[#27272A] bg-[#0A0A0C] relative flex items-center justify-center shadow-lg transition-all"
-                        >
-                          {/* Badge de formato na prévia */}
-                          <div className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md border border-white/15 text-[10px] font-mono text-zinc-300 flex items-center gap-1 shadow">
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                editingProject.aspectRatio === '1920x1080' ? 'bg-emerald-400' : 'bg-amber-400'
-                              }`}
-                            />
-                            <span>
-                              {editingProject.aspectRatio === '1920x1080'
-                                ? '1920×1080 (Vertical)'
-                                : editingProject.aspectRatio === '1350x1080'
-                                ? '1350×1080'
-                                : editingProject.aspectRatio || 'Vertical'}
-                            </span>
-                          </div>
-
-                          {editingProject.customImageUrl ? (
-                            <>
-                              <div
-                                className="absolute inset-0 bg-cover bg-center filter blur-xl scale-125 opacity-45 pointer-events-none"
-                                style={{ backgroundImage: `url(${editingProject.customImageUrl})` }}
-                                aria-hidden="true"
-                              />
-                              <div className="absolute inset-0 bg-black/35 pointer-events-none" aria-hidden="true" />
-                              <img
-                                src={editingProject.customImageUrl}
-                                alt={editingProject.title}
-                                className={`relative z-10 w-full h-full ${
-                                  editingProject.fitMode === 'cover' ? 'object-cover' : 'object-contain'
-                                } p-1`}
-                              />
-                            </>
-                          ) : (
-                            <div className="w-full h-full relative">
-                              <ProjectArtCanvas project={editingProject} />
-                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
-                                <span className="text-[10px] font-mono text-white/80 bg-black/70 px-2 py-1 rounded">
-                                  Mockup Padrão (Sem Foto Externa)
+                      return (
+                        <div className="p-5 rounded-xl border border-[#27272A] bg-[#0E0E12] space-y-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-display font-bold text-sm text-white">
+                                  Galeria de Imagens do Trabalho
+                                </h4>
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-mono text-emerald-400 font-semibold">
+                                  {currentImages.length} imagem{currentImages.length === 1 ? '' : 'ns'}
                                 </span>
                               </div>
+                              <p className="text-xs text-[#A1A1AA] mt-0.5">
+                                Adicione quantas fotos/artes quiser para este trabalho. O visitante poderá passar as imagens usando os botões laterais no site.
+                              </p>
                             </div>
-                          )}
-                        </div>
 
-                        <div className="md:col-span-7 space-y-3">
-                          <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleProjectImageUpload}
-                            accept="image/*"
-                            className="hidden"
-                          />
-
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isOptimizingImage || isSaving}
-                            className="w-full py-2.5 px-4 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-medium border border-zinc-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                          >
-                            {isOptimizingImage ? (
-                              <>
-                                <Loader2 className="w-4 h-4 text-emerald-400 animate-spin" />
-                                <span>Otimizando Arte em Alta Definição...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Upload className="w-4 h-4 text-zinc-300" />
-                                <span>Carregar Imagem do Dispositivo (Sem Limite)</span>
-                              </>
+                            {currentImages.length > 0 && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[11px] font-mono text-zinc-400">
+                                  Prévia ativa: #{safeActivePreviewIndex + 1} de {currentImages.length}
+                                </span>
+                              </div>
                             )}
-                          </button>
-                          <p className="text-[10px] text-zinc-400 font-mono flex items-center gap-1.5">
-                            <span className="text-emerald-400">✨</span>
-                            <span>Artes otimizadas em WebP para nitidez total e carregamento instantâneo.</span>
-                          </p>
-
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-mono text-zinc-400">
-                              Ou cole a URL direta da imagem:
-                            </label>
-                            <input
-                              type="text"
-                              value={editingProject.customImageUrl || ''}
-                              onChange={(e) =>
-                                setEditingProject({
-                                  ...editingProject,
-                                  customImageUrl: e.target.value,
-                                })
-                              }
-                              placeholder="https://exemplo.com/imagem-do-projeto.jpg"
-                              className="w-full px-3 py-2 bg-[#141418] border border-[#27272A] rounded-lg text-white text-xs focus:outline-none focus:border-white"
-                            />
                           </div>
 
-                          {editingProject.customImageUrl && (
-                            <div className="space-y-1.5 pt-1">
-                              <label className="text-[11px] font-mono text-zinc-400 uppercase flex items-center justify-between">
-                                <span>Ajuste da Imagem no Card</span>
-                                <span className="text-[10px] text-emerald-400">
-                                  {editingProject.fitMode === 'cover' ? 'Preenchendo moldura' : 'Sem cortar · Inteira evidente'}
+                          {/* Image Preview & Upload Controls */}
+                          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                            {/* Preview Box with Side Navigation Controls in Admin */}
+                            <div
+                              style={{
+                                aspectRatio:
+                                  editingProject.aspectRatio === '1920x1080'
+                                    ? '1080 / 1920'
+                                    : editingProject.aspectRatio === '1350x1080'
+                                    ? '1080 / 1350'
+                                    : editingProject.aspectRatio === '1080x1080'
+                                    ? '1 / 1'
+                                    : '1080 / 1920',
+                              }}
+                              className="md:col-span-5 max-h-[360px] w-full rounded-xl overflow-hidden border border-[#27272A] bg-[#0A0A0C] relative flex items-center justify-center shadow-lg transition-all group/adminPreview"
+                            >
+                              {/* Badge de formato na prévia */}
+                              <div className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md border border-white/15 text-[10px] font-mono text-zinc-300 flex items-center gap-1 shadow">
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    editingProject.aspectRatio === '1920x1080' ? 'bg-emerald-400' : 'bg-amber-400'
+                                  }`}
+                                />
+                                <span>
+                                  {editingProject.aspectRatio === '1920x1080'
+                                    ? '1920×1080'
+                                    : editingProject.aspectRatio === '1350x1080'
+                                    ? '1350×1080'
+                                    : editingProject.aspectRatio || 'Vertical'}
                                 </span>
-                              </label>
-                              <div className="grid grid-cols-2 gap-2">
+                              </div>
+
+                              {/* Badge de Capa */}
+                              {safeActivePreviewIndex === 0 && activeImageUrl && (
+                                <div className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded bg-emerald-500 text-black font-bold text-[10px] font-mono flex items-center gap-1 shadow">
+                                  <Star className="w-3 h-3 fill-black text-black" />
+                                  <span>Capa Principal</span>
+                                </div>
+                              )}
+
+                              {activeImageUrl ? (
+                                <>
+                                  <div
+                                    className="absolute inset-0 bg-cover bg-center filter blur-xl scale-125 opacity-45 pointer-events-none transition-all duration-300"
+                                    style={{ backgroundImage: `url(${activeImageUrl})` }}
+                                    aria-hidden="true"
+                                  />
+                                  <div className="absolute inset-0 bg-black/35 pointer-events-none" aria-hidden="true" />
+                                  <img
+                                    src={activeImageUrl}
+                                    alt={editingProject.title}
+                                    className={`relative z-10 w-full h-full ${
+                                      editingProject.fitMode === 'cover' ? 'object-cover' : 'object-contain'
+                                    } p-1`}
+                                  />
+
+                                  {/* Botões laterais na prévia do Admin */}
+                                  {currentImages.length > 1 && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setActiveImagePreviewIndex((prev) =>
+                                            prev > 0 ? prev - 1 : currentImages.length - 1
+                                          )
+                                        }
+                                        className="absolute left-2 top-1/2 -translate-y-1/2 z-30 p-1.5 rounded-full bg-black/80 hover:bg-black text-white border border-white/20 transition-all shadow-lg hover:scale-110 cursor-pointer"
+                                        title="Imagem anterior"
+                                      >
+                                        <ChevronLeft className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setActiveImagePreviewIndex((prev) =>
+                                            prev < currentImages.length - 1 ? prev + 1 : 0
+                                          )
+                                        }
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 z-30 p-1.5 rounded-full bg-black/80 hover:bg-black text-white border border-white/20 transition-all shadow-lg hover:scale-110 cursor-pointer"
+                                        title="Próxima imagem"
+                                      >
+                                        <ChevronRight className="w-4 h-4" />
+                                      </button>
+                                    </>
+                                  )}
+                                </>
+                              ) : (
+                                <div className="w-full h-full relative">
+                                  <ProjectArtCanvas project={editingProject} />
+                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
+                                    <span className="text-[10px] font-mono text-white/80 bg-black/70 px-2 py-1 rounded">
+                                      Mockup Padrão (Sem Foto Externa)
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Controls Column */}
+                            <div className="md:col-span-7 space-y-4">
+                              {/* File input accepting multiple files */}
+                              <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleProjectImageUpload}
+                                accept="image/*"
+                                multiple
+                                className="hidden"
+                              />
+
+                              <div className="flex flex-col sm:flex-row gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => setEditingProject({ ...editingProject, fitMode: 'contain' })}
-                                  className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-all text-left flex items-center justify-between ${
-                                    editingProject.fitMode !== 'cover'
-                                      ? 'bg-white text-black border-white font-semibold'
-                                      : 'bg-[#141418] text-zinc-400 border-[#27272A] hover:border-zinc-500'
-                                  }`}
+                                  onClick={() => fileInputRef.current?.click()}
+                                  disabled={isOptimizingImage || isSaving}
+                                  className="flex-1 py-2.5 px-4 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold border border-zinc-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                                 >
-                                  <span>Inteira (Sem Cortar)</span>
-                                  <span className="text-[9px] px-1 py-0.2 rounded bg-black/10">Evidente</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingProject({ ...editingProject, fitMode: 'cover' })}
-                                  className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-all text-left flex items-center justify-between ${
-                                    editingProject.fitMode === 'cover'
-                                      ? 'bg-white text-black border-white font-semibold'
-                                      : 'bg-[#141418] text-zinc-400 border-[#27272A] hover:border-zinc-500'
-                                  }`}
-                                >
-                                  <span>Preencher Tudo</span>
-                                  <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-zinc-300">Cover</span>
+                                  {isOptimizingImage ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 text-emerald-400 animate-spin" />
+                                      <span>Otimizando Imagem(ns)...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Upload className="w-4 h-4 text-emerald-400" />
+                                      <span>+ Carregar Imagens do Dispositivo (Múltiplas)</span>
+                                    </>
+                                  )}
                                 </button>
                               </div>
-                            </div>
-                          )}
+                              <p className="text-[10px] text-zinc-400 font-mono flex items-center gap-1.5">
+                                <span className="text-emerald-400">✨</span>
+                                <span>Pode selecionar 1 ou várias imagens de uma vez. Otimização em WebP sem perda de detalhes.</span>
+                              </p>
 
-                          {editingProject.customImageUrl && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setEditingProject({
-                                  ...editingProject,
-                                  customImageUrl: '',
-                                })
-                              }
-                              className="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-1.5 pt-1"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Remover imagem personalizada</span>
-                            </button>
-                          )}
+                              {/* Adicionar por URL */}
+                              <div className="space-y-1.5 pt-1 border-t border-[#27272A]/80">
+                                <label className="text-[11px] font-mono text-zinc-400">
+                                  Ou adicione imagem por link direto (URL):
+                                </label>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    value={newImageUrlInput}
+                                    onChange={(e) => setNewImageUrlInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddImageUrl();
+                                      }
+                                    }}
+                                    placeholder="https://exemplo.com/outra-foto.jpg"
+                                    className="flex-1 px-3 py-2 bg-[#141418] border border-[#27272A] rounded-lg text-white text-xs focus:outline-none focus:border-white"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={handleAddImageUrl}
+                                    disabled={!newImageUrlInput.trim()}
+                                    className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-white text-xs font-medium border border-zinc-700 transition-colors whitespace-nowrap"
+                                  >
+                                    + Adicionar URL
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Lista / Grid de Miniaturas de Todas as Imagens Cadastradas */}
+                              {currentImages.length > 0 && (
+                                <div className="space-y-2 pt-2 border-t border-[#27272A]">
+                                  <div className="flex items-center justify-between">
+                                    <label className="text-[11px] font-mono text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                                      <Layers className="w-3.5 h-3.5 text-zinc-400" />
+                                      <span>Imagens cadastradas ({currentImages.length})</span>
+                                    </label>
+                                    <span className="text-[10px] font-mono text-zinc-500">
+                                      Clique para inspecionar
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[220px] overflow-y-auto p-1.5 bg-[#121215] rounded-xl border border-[#27272A]">
+                                    {currentImages.map((imgUrl, idx) => {
+                                      const isCover = idx === 0;
+                                      const isSelected = idx === safeActivePreviewIndex;
+                                      return (
+                                        <div
+                                          key={idx}
+                                          onClick={() => setActiveImagePreviewIndex(idx)}
+                                          className={`group relative rounded-lg border overflow-hidden transition-all cursor-pointer flex flex-col ${
+                                            isSelected
+                                              ? 'border-emerald-400 bg-emerald-950/20 ring-1 ring-emerald-400/50'
+                                              : 'border-zinc-800 bg-zinc-900/60 hover:border-zinc-600'
+                                          }`}
+                                        >
+                                          {/* Thumbnail image */}
+                                          <div className="relative aspect-video w-full bg-black/60 overflow-hidden">
+                                            <img
+                                              src={imgUrl}
+                                              alt={`Foto ${idx + 1}`}
+                                              className="w-full h-full object-cover"
+                                            />
+                                            <div className="absolute top-1 left-1 px-1.5 py-0.2 rounded bg-black/80 backdrop-blur-sm text-[8px] font-mono text-zinc-300">
+                                              #{idx + 1}
+                                            </div>
+                                            {isCover && (
+                                              <div className="absolute top-1 right-1 px-1 py-0.2 rounded bg-emerald-500 text-black font-bold text-[8px] font-mono flex items-center gap-0.5">
+                                                <Star className="w-2.5 h-2.5 fill-black" />
+                                                <span>CAPA</span>
+                                              </div>
+                                            )}
+                                          </div>
+
+                                          {/* Thumbnail Action Bar */}
+                                          <div className="p-1.5 flex items-center justify-between gap-1 bg-[#0A0A0C]">
+                                            {!isCover ? (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleSetCoverImage(idx);
+                                                }}
+                                                className="text-[9px] font-mono text-zinc-400 hover:text-emerald-400 flex items-center gap-1 transition-colors"
+                                                title="Tornar imagem de capa principal"
+                                              >
+                                                <Star className="w-2.5 h-2.5" />
+                                                <span>Virar Capa</span>
+                                              </button>
+                                            ) : (
+                                              <span className="text-[9px] font-mono text-emerald-400 font-semibold">
+                                                Capa Principal
+                                              </span>
+                                            )}
+
+                                            <div className="flex items-center gap-0.5 ml-auto">
+                                              {idx > 0 && (
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleMoveImage(idx, idx - 1);
+                                                  }}
+                                                  className="p-1 text-zinc-400 hover:text-white rounded hover:bg-zinc-800"
+                                                  title="Mover para esquerda"
+                                                >
+                                                  <ArrowLeft className="w-2.5 h-2.5" />
+                                                </button>
+                                              )}
+                                              {idx < currentImages.length - 1 && (
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleMoveImage(idx, idx + 1);
+                                                  }}
+                                                  className="p-1 text-zinc-400 hover:text-white rounded hover:bg-zinc-800"
+                                                  title="Mover para direita"
+                                                >
+                                                  <ArrowRight className="w-2.5 h-2.5" />
+                                                </button>
+                                              )}
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleRemoveImageAtIndex(idx);
+                                                }}
+                                                className="p-1 text-red-400 hover:text-red-300 rounded hover:bg-red-950/40 ml-1"
+                                                title="Excluir imagem"
+                                              >
+                                                <Trash2 className="w-2.5 h-2.5" />
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Ajuste da imagem no card */}
+                              {currentImages.length > 0 && (
+                                <div className="space-y-1.5 pt-1">
+                                  <label className="text-[11px] font-mono text-zinc-400 uppercase flex items-center justify-between">
+                                    <span>Ajuste da Imagem nos Cards</span>
+                                    <span className="text-[10px] text-emerald-400">
+                                      {editingProject.fitMode === 'cover'
+                                        ? 'Preenchendo moldura'
+                                        : 'Sem cortar · Inteira evidente'}
+                                    </span>
+                                  </label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setEditingProject({ ...editingProject, fitMode: 'contain' })
+                                      }
+                                      className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-all text-left flex items-center justify-between ${
+                                        editingProject.fitMode !== 'cover'
+                                          ? 'bg-white text-black border-white font-semibold'
+                                          : 'bg-[#141418] text-zinc-400 border-[#27272A] hover:border-zinc-500'
+                                      }`}
+                                    >
+                                      <span>Inteira (Sem Cortar)</span>
+                                      <span className="text-[9px] px-1 py-0.2 rounded bg-black/10">Evidente</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setEditingProject({ ...editingProject, fitMode: 'cover' })
+                                      }
+                                      className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-all text-left flex items-center justify-between ${
+                                        editingProject.fitMode === 'cover'
+                                          ? 'bg-white text-black border-white font-semibold'
+                                          : 'bg-[#141418] text-zinc-400 border-[#27272A] hover:border-zinc-500'
+                                      }`}
+                                    >
+                                      <span>Preencher Tudo</span>
+                                      <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-zinc-300">Cover</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {currentImages.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingProject({
+                                      ...editingProject,
+                                      customImageUrl: '',
+                                      images: [],
+                                    });
+                                    setActiveImagePreviewIndex(0);
+                                  }}
+                                  className="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-1.5 pt-1"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Remover todas as imagens</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
+                      );
+                    })()}
 
                     {/* Section 2: Metadata & Main Info */}
                     <div className="p-5 rounded-xl border border-[#27272A] bg-[#0E0E12] space-y-4">
@@ -1194,55 +1538,88 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {projects.map((proj) => (
-                        <div
-                          key={proj.id}
-                          className="p-4 rounded-xl border border-[#27272A] bg-[#0E0E12] flex gap-4 items-center justify-between hover:border-zinc-600 transition-colors group"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            {/* Project Thumbnail */}
-                            <div className="w-16 h-16 rounded-lg bg-black border border-zinc-800 overflow-hidden shrink-0 flex items-center justify-center relative">
-                              {proj.customImageUrl ? (
-                                <img
-                                  src={proj.customImageUrl}
-                                  alt={proj.title}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full scale-50 origin-top-left pointer-events-none">
-                                  <ProjectArtCanvas project={proj} />
-                                </div>
-                              )}
-                            </div>
+                      {projects.map((proj) => {
+                        const openEditor = () => {
+                          const projImgs = proj.images && proj.images.length > 0
+                            ? [...proj.images]
+                            : (proj.customImageUrl ? [proj.customImageUrl] : []);
+                          setEditingProject({
+                            ...proj,
+                            images: projImgs,
+                            customImageUrl: projImgs[0] || proj.customImageUrl || '',
+                          });
+                          setActiveImagePreviewIndex(0);
+                          setNewImageUrlInput('');
+                          setIsCreatingNew(false);
+                        };
 
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 flex-wrap">
-                                <span>{proj.year}</span>
-                                <span>·</span>
-                                <span className="text-zinc-200 font-semibold">{proj.category}</span>
-                                <span>·</span>
-                                <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[9px] text-zinc-300 border border-zinc-700">
-                                  {proj.aspectRatio === '1350x1080'
-                                    ? '1350×1080 (3 por fila)'
-                                    : proj.aspectRatio === '1920x1080'
-                                    ? '1920×1080 (4 por fila)'
-                                    : proj.aspectRatio || '4:3'}
-                                </span>
+                        return (
+                          <div
+                            key={proj.id}
+                            className="p-4 rounded-xl border border-[#27272A] bg-[#0E0E12] flex gap-4 items-center justify-between hover:border-zinc-500 transition-colors group"
+                          >
+                            <div
+                              onClick={openEditor}
+                              className="flex items-center gap-3 min-w-0 cursor-pointer flex-1"
+                              title="Clique para editar este trabalho"
+                            >
+                              {/* Project Thumbnail */}
+                              <div className="w-16 h-16 rounded-lg bg-black border border-zinc-800 overflow-hidden shrink-0 flex items-center justify-center relative">
+                                {proj.customImageUrl ? (
+                                  <img
+                                    src={proj.customImageUrl}
+                                    alt={proj.title}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full scale-50 origin-top-left pointer-events-none">
+                                    <ProjectArtCanvas project={proj} />
+                                  </div>
+                                )}
                               </div>
-                              <h4 className="font-display font-bold text-sm text-white truncate mt-0.5">
-                                {proj.title}
-                              </h4>
-                              <p className="text-xs text-zinc-400 truncate">
-                                {proj.client}
-                              </p>
+
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 flex-wrap">
+                                  <span>{proj.year}</span>
+                                  <span>·</span>
+                                  <span className="text-zinc-200 font-semibold">{proj.category}</span>
+                                  <span>·</span>
+                                  <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[9px] text-zinc-300 border border-zinc-700">
+                                    {proj.aspectRatio === '1350x1080'
+                                      ? '1350×1080'
+                                      : proj.aspectRatio === '1920x1080'
+                                      ? '1920×1080'
+                                      : proj.aspectRatio || '4:3'}
+                                  </span>
+                                  {proj.images && proj.images.length > 1 && (
+                                    <span className="px-1.5 py-0.2 rounded bg-emerald-950/70 text-emerald-400 border border-emerald-800/40 text-[9px] font-mono">
+                                      {proj.images.length} fotos
+                                    </span>
+                                  )}
+                                </div>
+                                <h4 className="font-display font-bold text-sm text-white truncate mt-0.5 group-hover:text-emerald-400 transition-colors">
+                                  {proj.title}
+                                </h4>
+                                <p className="text-xs text-zinc-400 truncate">
+                                  {proj.client}
+                                </p>
+                              </div>
                             </div>
-                          </div>
 
                           {/* Quick Actions */}
                           <div className="flex items-center gap-1.5 shrink-0">
                             <button
                               onClick={() => {
-                                setEditingProject({ ...proj });
+                                const projImgs = proj.images && proj.images.length > 0
+                                  ? [...proj.images]
+                                  : (proj.customImageUrl ? [proj.customImageUrl] : []);
+                                setEditingProject({
+                                  ...proj,
+                                  images: projImgs,
+                                  customImageUrl: projImgs[0] || proj.customImageUrl || '',
+                                });
+                                setActiveImagePreviewIndex(0);
+                                setNewImageUrlInput('');
                                 setIsCreatingNew(false);
                               }}
                               className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition-colors"
@@ -1266,7 +1643,8 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                             </button>
                           </div>
                         </div>
-                      ))}
+                      );
+                    })}
                     </div>
                   </div>
                 )

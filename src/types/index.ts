@@ -29,7 +29,19 @@ export interface Project {
   featured: boolean;
   themeColor: string;
   customImageUrl?: string;
+  images?: string[];
   fitMode?: 'contain' | 'cover';
+}
+
+export function getProjectImages(project: Project): string[] {
+  if (project.images && Array.isArray(project.images) && project.images.length > 0) {
+    const valid = project.images.filter(Boolean);
+    if (valid.length > 0) return valid;
+  }
+  if (project.customImageUrl) {
+    return [project.customImageUrl];
+  }
+  return [];
 }
 
 export interface ServiceSpecialty {
