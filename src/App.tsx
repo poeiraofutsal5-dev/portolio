@@ -24,7 +24,9 @@ export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [contactPrefillService, setContactPrefillService] = useState<string>('');
+  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(true);
   const isInitializedRef = useRef(false);
+  const isSelfSavingRef = useRef(false);
 
   // Dynamic projects with localStorage cached fallback
   const [projects, setProjects] = useState<Project[]>(() => {
@@ -63,28 +65,43 @@ export default function App() {
   // Real-time synchronization across all devices via Firebase Firestore
   useEffect(() => {
     // Validate connection
-    testConnection();
+    testConnection().then((connected) => {
+      setIsCloudConnected(connected);
+    });
 
     // Subscribe to live cloud updates
-    const unsubscribe = subscribeToStudioConfig((cloudData) => {
-      isInitializedRef.current = true;
-      setProjects(cloudData.projects);
-      setFooterLogo(cloudData.footerLogo);
-      setFooterLogoHeight(cloudData.footerLogoHeight);
+    const unsubscribe = subscribeToStudioConfig(
+      (cloudData, source) => {
+        const hadInitialData = isInitializedRef.current;
+        isInitializedRef.current = true;
+        setIsCloudConnected(true);
 
-      // Keep local cache fresh for instant offline access
-      try {
-        localStorage.setItem('jpx_custom_projects_v1', JSON.stringify(cloudData.projects));
-        if (cloudData.footerLogo) {
-          localStorage.setItem('jpx_custom_footer_logo_v1', cloudData.footerLogo);
-        } else {
-          localStorage.removeItem('jpx_custom_footer_logo_v1');
+        setProjects(cloudData.projects);
+        setFooterLogo(cloudData.footerLogo);
+        setFooterLogoHeight(cloudData.footerLogoHeight);
+
+        // Keep local cache fresh for instant offline access
+        try {
+          localStorage.setItem('jpx_custom_projects_v1', JSON.stringify(cloudData.projects));
+          if (cloudData.footerLogo) {
+            localStorage.setItem('jpx_custom_footer_logo_v1', cloudData.footerLogo);
+          } else {
+            localStorage.removeItem('jpx_custom_footer_logo_v1');
+          }
+          localStorage.setItem('jpx_custom_footer_logo_height_v1', cloudData.footerLogoHeight.toString());
+        } catch (e) {
+          console.warn('Erro ao atualizar cache local:', e);
         }
-        localStorage.setItem('jpx_custom_footer_logo_height_v1', cloudData.footerLogoHeight.toString());
-      } catch (e) {
-        console.warn('Erro ao atualizar cache local:', e);
+
+        // Notify if update arrived from another device/browser in real time
+        if (hadInitialData && !isSelfSavingRef.current && source === 'cloud') {
+          showToast('Conteúdo atualizado simultaneamente via nuvem!');
+        }
+      },
+      () => {
+        setIsCloudConnected(false);
       }
-    });
+    );
 
     return () => {
       unsubscribe();
@@ -95,7 +112,7 @@ export default function App() {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage((prev) => (prev === msg ? null : prev));
-    }, 3000);
+    }, 3500);
   };
 
   const handleOpenProject = (project: Project) => {
@@ -118,7 +135,7 @@ export default function App() {
   };
 
   // Save changes to both local cache and Firebase Cloud so all devices sync instantly
-  const handleSaveProjects = async (updatedProjects: Project[]) => {
+  const handleSaveProjects = async (updatedProjects: Project[]): Promise<boolean> => {
     setProjects(updatedProjects);
     try {
       localStorage.setItem('jpx_custom_projects_v1', JSON.stringify(updatedProjects));
@@ -126,16 +143,23 @@ export default function App() {
       console.error('Erro ao salvar projetos no storage:', err);
     }
 
+    isSelfSavingRef.current = true;
     try {
       await saveStudioConfigToFirebase(updatedProjects, footerLogo, footerLogoHeight);
       showToast('Sincronizado na nuvem com todos os dispositivos!');
-    } catch (err) {
+      return true;
+    } catch (err: any) {
       console.error('Erro ao sincronizar com Firebase:', err);
-      showToast('Salvo localmente (offline)');
+      showToast(err?.message || 'Erro ao sincronizar na nuvem.');
+      throw err;
+    } finally {
+      setTimeout(() => {
+        isSelfSavingRef.current = false;
+      }, 1000);
     }
   };
 
-  const handleSaveFooterLogo = async (logoUrl: string | null) => {
+  const handleSaveFooterLogo = async (logoUrl: string | null): Promise<boolean> => {
     setFooterLogo(logoUrl);
     try {
       if (logoUrl) {
@@ -147,15 +171,23 @@ export default function App() {
       console.error('Erro ao salvar logo do rodapé:', err);
     }
 
+    isSelfSavingRef.current = true;
     try {
       await saveStudioConfigToFirebase(projects, logoUrl, footerLogoHeight);
       showToast('Logo sincronizada na nuvem com todos os dispositivos!');
-    } catch (err) {
+      return true;
+    } catch (err: any) {
       console.error('Erro ao sincronizar com Firebase:', err);
+      showToast(err?.message || 'Erro ao sincronizar logo na nuvem.');
+      throw err;
+    } finally {
+      setTimeout(() => {
+        isSelfSavingRef.current = false;
+      }, 1000);
     }
   };
 
-  const handleSaveFooterLogoHeight = async (height: number) => {
+  const handleSaveFooterLogoHeight = async (height: number): Promise<boolean> => {
     setFooterLogoHeight(height);
     try {
       localStorage.setItem('jpx_custom_footer_logo_height_v1', height.toString());
@@ -163,17 +195,27 @@ export default function App() {
       console.error('Erro ao salvar altura da logo do rodapé:', err);
     }
 
+    isSelfSavingRef.current = true;
     try {
       await saveStudioConfigToFirebase(projects, footerLogo, height);
-    } catch (err) {
+      return true;
+    } catch (err: any) {
       console.error('Erro ao sincronizar com Firebase:', err);
+      throw err;
+    } finally {
+      setTimeout(() => {
+        isSelfSavingRef.current = false;
+      }, 1000);
     }
   };
 
   return (
     <div className="min-h-screen bg-[#050505] text-[#F4F4F5] flex flex-col selection:bg-white selection:text-black">
       {/* Top Navigation with gray Lock icon beside Iniciar Projeto */}
-      <Header onOpenAdmin={() => setIsAdminOpen(true)} />
+      <Header
+        onOpenAdmin={() => setIsAdminOpen(true)}
+        isCloudConnected={isCloudConnected}
+      />
 
       {/* Main Content Sections */}
       <main className="flex-1">
@@ -226,6 +268,7 @@ export default function App() {
         footerLogoHeight={footerLogoHeight}
         onSaveFooterLogoHeight={handleSaveFooterLogoHeight}
         onShowToast={showToast}
+        isCloudConnected={isCloudConnected}
       />
 
       {/* Design System, Copywriting & Implementation Guide Modal */}

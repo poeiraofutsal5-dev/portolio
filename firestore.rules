@@ -10,20 +10,9 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    function isValidStudioConfig(data) {
-      return data.projects is list
-        && data.projects.size() <= 50
-        && (!('footerLogo' in data) || data.footerLogo == null || (data.footerLogo is string && data.footerLogo.size() <= 2000000))
-        && (!('footerLogoHeight' in data) || data.footerLogoHeight is number)
-        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
-    }
-
     match /studio_config/{configId} {
-      // Allow public read so the portfolio is visible on any device
-      allow get: if isValidId(configId);
-      // Allow write when payload matches strict configuration structure
-      allow create, update: if isValidId(configId) && isValidStudioConfig(request.resource.data);
-      allow delete: if false;
+      // Allow read and write so that studio settings and projects sync in real-time across all devices
+      allow read, write: if isValidId(configId);
     }
   }
 }

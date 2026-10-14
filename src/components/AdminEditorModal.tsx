@@ -20,18 +20,22 @@ import {
   ChevronLeft,
   Sparkles,
   AlertCircle,
+  Loader2,
+  CloudCheck,
 } from 'lucide-react';
+import { optimizeImageFile, optimizeLogoFile } from '../lib/imageOptimizer';
 
 interface AdminEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
   projects: Project[];
-  onSaveProjects: (projects: Project[]) => void;
+  onSaveProjects: (projects: Project[]) => Promise<boolean> | void;
   footerLogo: string | null;
-  onSaveFooterLogo: (logoUrl: string | null) => void;
+  onSaveFooterLogo: (logoUrl: string | null) => Promise<boolean> | void;
   footerLogoHeight: number;
-  onSaveFooterLogoHeight: (height: number) => void;
+  onSaveFooterLogoHeight: (height: number) => Promise<boolean> | void;
   onShowToast: (message: string) => void;
+  isCloudConnected?: boolean;
 }
 
 const CATEGORIES: ProjectCategory[] = [
@@ -52,6 +56,7 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
   footerLogoHeight,
   onSaveFooterLogoHeight,
   onShowToast,
+  isCloudConnected = true,
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem('jpx_admin_auth') === 'true';
@@ -67,6 +72,10 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
 
+  // Async states
+  const [isSaving, setIsSaving] = useState(false);
+  const [isOptimizingImage, setIsOptimizingImage] = useState(false);
+
   // Logo tab draft state
   const [draftLogoUrl, setDraftLogoUrl] = useState<string | null>(footerLogo);
   const [draftLogoHeight, setDraftLogoHeight] = useState<number>(footerLogoHeight);
@@ -77,6 +86,11 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Approximate cloud payload size for health verification
+  const estimatedPayloadKb = Math.round(
+    JSON.stringify({ projects, footerLogo, footerLogoHeight }).length / 1024
+  );
 
   useEffect(() => {
     setDraftLogoUrl(footerLogo);
@@ -113,39 +127,52 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
     onShowToast('Sessão encerrada.');
   };
 
-  // Upload image file for project
-  const handleProjectImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Upload and compress image file for project
+  const handleProjectImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && editingProject) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64 = event.target?.result as string;
+      try {
+        setIsOptimizingImage(true);
+        onShowToast('Otimizando imagem para sincronização em tempo real...');
+        const optimized = await optimizeImageFile(file);
+        const approxKb = Math.round(optimized.length / 1024);
         setEditingProject({
           ...editingProject,
-          customImageUrl: base64,
+          customImageUrl: optimized,
         });
-        onShowToast('Imagem carregada com sucesso!');
-      };
-      reader.readAsDataURL(file);
+        onShowToast(`Imagem otimizada com sucesso (~${approxKb} KB)!`);
+      } catch (err) {
+        console.error('Erro ao otimizar imagem:', err);
+        onShowToast('Erro ao processar imagem.');
+      } finally {
+        setIsOptimizingImage(false);
+        e.target.value = '';
+      }
     }
   };
 
-  // Upload image file for footer logo
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Upload and compress image file for footer logo
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64 = event.target?.result as string;
-        setDraftLogoUrl(base64);
-        onShowToast('Logo carregada no preview!');
-      };
-      reader.readAsDataURL(file);
+      try {
+        setIsOptimizingImage(true);
+        onShowToast('Otimizando logo para sincronização...');
+        const optimized = await optimizeLogoFile(file);
+        setDraftLogoUrl(optimized);
+        onShowToast('Logo otimizada e pronta para salvar!');
+      } catch (err) {
+        console.error('Erro ao otimizar logo:', err);
+        onShowToast('Erro ao processar arquivo de logo.');
+      } finally {
+        setIsOptimizingImage(false);
+        e.target.value = '';
+      }
     }
   };
 
   // Save current editing project
-  const handleSaveProjectForm = () => {
+  const handleSaveProjectForm = async () => {
     if (!editingProject) return;
 
     if (!editingProject.title.trim()) {
@@ -162,59 +189,101 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
       );
     }
 
-    onSaveProjects(updatedList);
-    setEditingProject(null);
-    setIsCreatingNew(false);
-    onShowToast(`Projeto "${editingProject.title}" salvo com sucesso!`);
+    try {
+      setIsSaving(true);
+      await onSaveProjects(updatedList);
+      setEditingProject(null);
+      setIsCreatingNew(false);
+      onShowToast(`Projeto "${editingProject.title}" sincronizado na nuvem!`);
+    } catch (err: any) {
+      onShowToast(err?.message || 'Erro ao sincronizar com a nuvem.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Delete project
-  const handleDeleteProject = (projectId: string, projectTitle: string) => {
+  const handleDeleteProject = async (projectId: string, projectTitle: string) => {
     if (window.confirm(`Tem certeza que deseja excluir o projeto "${projectTitle}"?`)) {
       const updated = projects.filter((p) => p.id !== projectId);
-      onSaveProjects(updated);
-      onShowToast(`Projeto "${projectTitle}" excluído.`);
+      try {
+        setIsSaving(true);
+        await onSaveProjects(updated);
+        onShowToast(`Projeto "${projectTitle}" excluído e sincronizado.`);
+      } catch (err: any) {
+        onShowToast(err?.message || 'Erro ao excluir.');
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
   // Duplicate project
-  const handleDuplicateProject = (project: Project) => {
+  const handleDuplicateProject = async (project: Project) => {
     const duplicated: Project = {
       ...project,
       id: `${project.id}-copy-${Date.now()}`,
       title: `${project.title} (Cópia)`,
     };
-    onSaveProjects([duplicated, ...projects]);
-    onShowToast(`Projeto "${project.title}" duplicado.`);
+    try {
+      setIsSaving(true);
+      await onSaveProjects([duplicated, ...projects]);
+      onShowToast(`Projeto "${project.title}" duplicado e sincronizado.`);
+    } catch (err: any) {
+      onShowToast(err?.message || 'Erro ao duplicar.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Reset to original projects
-  const handleResetToDefaults = () => {
+  const handleResetToDefaults = async () => {
     if (
       window.confirm(
-        'Deseja restaurar a lista original de projetos? Todas as alterações personalizadas em projetos serão redefinidas.'
+        'Deseja restaurar a lista original de projetos? Todas as alterações personalizadas em projetos serão redefinidas e sincronizadas.'
       )
     ) {
-      onSaveProjects(JPX_PROJECTS);
-      setEditingProject(null);
-      onShowToast('Projetos restaurados para a versão padrão.');
+      try {
+        setIsSaving(true);
+        await onSaveProjects(JPX_PROJECTS);
+        setEditingProject(null);
+        onShowToast('Projetos restaurados para a versão padrão.');
+      } catch (err: any) {
+        onShowToast(err?.message || 'Erro ao restaurar.');
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
   // Save footer logo changes
-  const handleSaveFooterLogo = () => {
-    onSaveFooterLogo(draftLogoUrl);
-    onSaveFooterLogoHeight(draftLogoHeight);
-    onShowToast('Logo do rodapé atualizada com sucesso!');
+  const handleSaveFooterLogo = async () => {
+    try {
+      setIsSaving(true);
+      await onSaveFooterLogo(draftLogoUrl);
+      await onSaveFooterLogoHeight(draftLogoHeight);
+      onShowToast('Logo do rodapé sincronizada com todos os dispositivos!');
+    } catch (err: any) {
+      onShowToast(err?.message || 'Erro ao sincronizar logo.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Reset footer logo
-  const handleResetFooterLogo = () => {
+  const handleResetFooterLogo = async () => {
     setDraftLogoUrl(null);
     setDraftLogoHeight(32);
-    onSaveFooterLogo(null);
-    onSaveFooterLogoHeight(32);
-    onShowToast('Logo do rodapé redefinida para o logotipo oficial padrão.');
+    try {
+      setIsSaving(true);
+      await onSaveFooterLogo(null);
+      await onSaveFooterLogoHeight(32);
+      onShowToast('Logo do rodapé redefinida para o logotipo oficial padrão.');
+    } catch (err: any) {
+      onShowToast(err?.message || 'Erro ao resetar logo.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Initialize new project
@@ -257,16 +326,34 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
               <h2 className="font-display font-bold text-base text-white flex items-center gap-2">
                 Painel do Administrador
                 {isAuthenticated && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Sincronizado na Nuvem (Todos os Dispositivos)
+                  <span
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex items-center gap-1.5 ${
+                      isCloudConnected
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                        : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isCloudConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                      }`}
+                    />
+                    {isCloudConnected
+                      ? 'Sincronização Simultânea Ativa'
+                      : 'Reconectando à Nuvem...'}
                   </span>
                 )}
               </h2>
-              <p className="text-xs text-[#A1A1AA] flex items-center gap-2">
+              <p className="text-xs text-[#A1A1AA] flex items-center gap-2 flex-wrap">
                 <span>Edição de Projetos e Logo</span>
                 <span className="text-zinc-600">·</span>
-                <span className="text-emerald-400/90 font-mono text-[11px]">Firebase Cloud: UiDBo8OtShNXwp46ZnX2</span>
+                <span className="text-emerald-400/90 font-mono text-[11px]" title="ID do documento Firestore">
+                  Doc: UiDBo8OtShNXwp46ZnX2
+                </span>
+                <span className="text-zinc-600">·</span>
+                <span className="text-zinc-400 font-mono text-[11px]">
+                  Nuvem: ~{estimatedPayloadKb} KB / 1000 KB
+                </span>
               </p>
             </div>
           </div>
@@ -503,10 +590,20 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                           <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="w-full py-2.5 px-4 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-medium border border-zinc-700 transition-colors flex items-center justify-center gap-2"
+                            disabled={isOptimizingImage || isSaving}
+                            className="w-full py-2.5 px-4 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-medium border border-zinc-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                           >
-                            <Upload className="w-4 h-4 text-zinc-300" />
-                            <span>Carregar Imagem do Dispositivo (Upload)</span>
+                            {isOptimizingImage ? (
+                              <>
+                                <Loader2 className="w-4 h-4 text-emerald-400 animate-spin" />
+                                <span>Otimizando Imagem para a Nuvem...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-4 h-4 text-zinc-300" />
+                                <span>Carregar Imagem do Dispositivo (Upload Otimizado)</span>
+                              </>
+                            )}
                           </button>
 
                           <div className="space-y-1">
@@ -829,10 +926,20 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                       <button
                         type="button"
                         onClick={handleSaveProjectForm}
-                        className="px-6 py-2.5 text-xs font-semibold text-black bg-white hover:bg-zinc-200 rounded-lg transition-colors shadow-lg flex items-center gap-2"
+                        disabled={isSaving || isOptimizingImage}
+                        className="px-6 py-2.5 text-xs font-semibold text-black bg-white hover:bg-zinc-200 rounded-lg transition-colors shadow-lg flex items-center gap-2 disabled:opacity-50"
                       >
-                        <Check className="w-4 h-4" />
-                        <span>Salvar Todas as Alterações</span>
+                        {isSaving ? (
+                          <>
+                            <Loader2 className="w-4 h-4 text-black animate-spin" />
+                            <span>Sincronizando com a Nuvem...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4" />
+                            <span>Salvar & Sincronizar em Todos os Dispositivos</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -971,16 +1078,27 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                       <button
                         type="button"
                         onClick={() => logoFileInputRef.current?.click()}
-                        className="flex-1 py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-medium border border-zinc-700 transition-colors flex items-center justify-center gap-2"
+                        disabled={isOptimizingImage || isSaving}
+                        className="flex-1 py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-medium border border-zinc-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                       >
-                        <Upload className="w-4 h-4 text-zinc-300" />
-                        <span>Carregar Arquivo de Imagem (PNG, SVG, JPG)</span>
+                        {isOptimizingImage ? (
+                          <>
+                            <Loader2 className="w-4 h-4 text-emerald-400 animate-spin" />
+                            <span>Otimizando Logo...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4 text-zinc-300" />
+                            <span>Carregar Arquivo de Imagem (PNG, SVG, JPG Otimizado)</span>
+                          </>
+                        )}
                       </button>
 
                       <button
                         type="button"
                         onClick={handleResetFooterLogo}
-                        className="py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition-colors flex items-center justify-center gap-2"
+                        disabled={isSaving || isOptimizingImage}
+                        className="py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                       >
                         <RotateCcw className="w-4 h-4 text-zinc-400" />
                         <span>Restaurar Logo Padrão</span>
@@ -1023,10 +1141,20 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                     <button
                       type="button"
                       onClick={handleSaveFooterLogo}
-                      className="px-6 py-2.5 text-xs font-semibold text-black bg-white hover:bg-zinc-200 rounded-lg transition-colors shadow-lg flex items-center gap-2"
+                      disabled={isSaving || isOptimizingImage}
+                      className="px-6 py-2.5 text-xs font-semibold text-black bg-white hover:bg-zinc-200 rounded-lg transition-colors shadow-lg flex items-center gap-2 disabled:opacity-50"
                     >
-                      <Check className="w-4 h-4" />
-                      <span>Salvar Logo do Rodapé</span>
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="w-4 h-4 text-black animate-spin" />
+                          <span>Sincronizando Logo na Nuvem...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>Salvar & Sincronizar Logo em Todos os Dispositivos</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>

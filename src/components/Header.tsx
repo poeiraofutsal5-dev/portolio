@@ -4,9 +4,10 @@ import { Menu, X, Lock } from 'lucide-react';
 interface HeaderProps {
   onOpenAdmin: () => void;
   onOpenDesignSystem?: () => void;
+  isCloudConnected?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenAdmin }) => {
+export const Header: React.FC<HeaderProps> = ({ onOpenAdmin, isCloudConnected = true }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const scrollTo = (id: string) => {
@@ -66,11 +67,17 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAdmin }) => {
           </button>
           <button
             onClick={onOpenAdmin}
-            className="p-2 text-zinc-400 hover:text-white rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-900/80 hover:bg-zinc-800 transition-colors group shrink-0"
-            title="Acesso Administrativo (Editar Projetos & Logo)"
+            className="relative p-2 text-zinc-400 hover:text-white rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-900/80 hover:bg-zinc-800 transition-colors group shrink-0"
+            title="Acesso Administrativo (Editar Projetos & Logo - Sincronizado na Nuvem)"
             aria-label="Acesso Administrativo aos Projetos e Logo"
           >
             <Lock className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+            <span
+              className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-[#050505] ${
+                isCloudConnected ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-amber-400'
+              }`}
+              title={isCloudConnected ? 'Sincronização em tempo real ativa' : 'Conectando à nuvem...'}
+            />
           </button>
         </div>
 
@@ -78,11 +85,16 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAdmin }) => {
         <div className="flex sm:hidden items-center gap-2">
           <button
             onClick={onOpenAdmin}
-            className="p-2 text-zinc-400 hover:text-white rounded-lg border border-zinc-800 bg-zinc-900/80"
+            className="relative p-2 text-zinc-400 hover:text-white rounded-lg border border-zinc-800 bg-zinc-900/80"
             title="Acesso Administrativo"
             aria-label="Acesso Administrativo"
           >
             <Lock className="w-4 h-4 text-zinc-400" />
+            <span
+              className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-[#050505] ${
+                isCloudConnected ? 'bg-emerald-400' : 'bg-amber-400'
+              }`}
+            />
           </button>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
