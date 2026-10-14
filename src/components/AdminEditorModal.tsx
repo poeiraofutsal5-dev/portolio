@@ -31,9 +31,10 @@ interface AdminEditorModalProps {
   projects: Project[];
   onSaveProjects: (projects: Project[]) => Promise<boolean> | void;
   footerLogo: string | null;
-  onSaveFooterLogo: (logoUrl: string | null) => Promise<boolean> | void;
   footerLogoHeight: number;
-  onSaveFooterLogoHeight: (height: number) => Promise<boolean> | void;
+  onSaveLogoConfig?: (logoUrl: string | null, height: number) => Promise<boolean> | void;
+  onSaveFooterLogo?: (logoUrl: string | null) => Promise<boolean> | void;
+  onSaveFooterLogoHeight?: (height: number) => Promise<boolean> | void;
   onShowToast: (message: string) => void;
   isCloudConnected?: boolean;
 }
@@ -52,8 +53,9 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
   projects,
   onSaveProjects,
   footerLogo,
-  onSaveFooterLogo,
   footerLogoHeight,
+  onSaveLogoConfig,
+  onSaveFooterLogo,
   onSaveFooterLogoHeight,
   onShowToast,
   isCloudConnected = true,
@@ -256,13 +258,17 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
     }
   };
 
-  // Save footer logo changes
+  // Save logo changes atomically across all devices
   const handleSaveFooterLogo = async () => {
     try {
       setIsSaving(true);
-      await onSaveFooterLogo(draftLogoUrl);
-      await onSaveFooterLogoHeight(draftLogoHeight);
-      onShowToast('Logo do rodapé sincronizada com todos os dispositivos!');
+      if (onSaveLogoConfig) {
+        await onSaveLogoConfig(draftLogoUrl, draftLogoHeight);
+      } else {
+        if (onSaveFooterLogo) await onSaveFooterLogo(draftLogoUrl);
+        if (onSaveFooterLogoHeight) await onSaveFooterLogoHeight(draftLogoHeight);
+      }
+      onShowToast('Logotipo salvo e sincronizado em todos os dispositivos!');
     } catch (err: any) {
       onShowToast(err?.message || 'Erro ao sincronizar logo.');
     } finally {
@@ -270,17 +276,21 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
     }
   };
 
-  // Reset footer logo
+  // Reset logo to default vector
   const handleResetFooterLogo = async () => {
     setDraftLogoUrl(null);
     setDraftLogoHeight(32);
     try {
       setIsSaving(true);
-      await onSaveFooterLogo(null);
-      await onSaveFooterLogoHeight(32);
-      onShowToast('Logo do rodapé redefinida para o logotipo oficial padrão.');
+      if (onSaveLogoConfig) {
+        await onSaveLogoConfig(null, 32);
+      } else {
+        if (onSaveFooterLogo) await onSaveFooterLogo(null);
+        if (onSaveFooterLogoHeight) await onSaveFooterLogoHeight(32);
+      }
+      onShowToast('Logotipo restaurado para a versão padrão.');
     } catch (err: any) {
-      onShowToast(err?.message || 'Erro ao resetar logo.');
+      onShowToast(err?.message || 'Erro ao restaurar logo.');
     } finally {
       setIsSaving(false);
     }
@@ -473,7 +483,7 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                       : 'border-transparent text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
-                  <span>Logo do Rodapé</span>
+                  <span>Logotipo (Topo & Rodapé)</span>
                   {footerLogo && (
                     <span className="w-2 h-2 rounded-full bg-emerald-400" />
                   )}
@@ -1030,40 +1040,71 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                 <div className="max-w-2xl mx-auto space-y-6">
                   <div>
                     <h3 className="font-display font-bold text-lg text-white">
-                      Personalização da Logo no Rodapé
+                      Logotipo Oficial do Estúdio (Topo & Rodapé)
                     </h3>
                     <p className="text-xs text-[#A1A1AA] mt-1">
-                      Aqui você pode alterar a imagem da logo que aparece no rodapé do site, enviando uma imagem própria ou inserindo um link.
+                      Altere a logotipo que aparece no menu superior (cabeçalho) e no rodapé do site. As alterações são sincronizadas simultaneamente em todos os navegadores e dispositivos conectados.
                     </p>
                   </div>
 
-                  {/* Live Preview Box */}
-                  <div className="p-6 rounded-xl border border-[#27272A] bg-[#050505] space-y-3">
-                    <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider block">
-                      Pré-visualização ao vivo no Rodapé:
-                    </span>
-                    <div className="p-6 rounded-lg bg-[#050505] border border-zinc-800 flex items-center justify-center min-h-[100px]">
-                      {draftLogoUrl ? (
-                        <img
-                          src={draftLogoUrl}
-                          alt="Logo do Rodapé"
-                          style={{ height: draftLogoHeight }}
-                          className="w-auto object-contain"
-                        />
-                      ) : (
-                        <JPXLogo height={draftLogoHeight} className="text-white" />
-                      )}
+                  {/* Dual Live Preview Box */}
+                  <div className="p-5 rounded-xl border border-[#27272A] bg-[#050505] space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider block">
+                        Pré-visualização ao vivo:
+                      </span>
+                      <span className="text-[11px] font-mono text-zinc-400">
+                        {draftLogoUrl ? 'Logo Personalizada Ativa' : 'Logotipo Vetorial Padrão'}
+                      </span>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500">
-                      <span>Status: {draftLogoUrl ? 'Logo Personalizada Ativa' : 'Logotipo Vetorial Padrão'}</span>
-                      <span>Altura: {draftLogoHeight}px</span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Top Header Preview */}
+                      <div className="p-3.5 rounded-lg bg-[#0E0E12] border border-zinc-800 space-y-2">
+                        <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider block">
+                          Topo / Cabeçalho (Header):
+                        </span>
+                        <div className="h-14 flex items-center justify-start px-3 bg-[#050505] rounded border border-zinc-900">
+                          {draftLogoUrl ? (
+                            <img
+                              src={draftLogoUrl}
+                              alt="Logo Cabeçalho"
+                              style={{ height: Math.min(Math.max(draftLogoHeight, 22), 40) }}
+                              className="w-auto object-contain max-h-10"
+                            />
+                          ) : (
+                            <span className="font-display font-extrabold text-lg text-white tracking-tighter">JPXSTUDIO</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Footer Preview */}
+                      <div className="p-3.5 rounded-lg bg-[#0E0E12] border border-zinc-800 space-y-2">
+                        <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider block">
+                          Rodapé (Footer):
+                        </span>
+                        <div className="h-14 flex items-center justify-start px-3 bg-[#050505] rounded border border-zinc-900 gap-3">
+                          {draftLogoUrl ? (
+                            <img
+                              src={draftLogoUrl}
+                              alt="Logo Rodapé"
+                              style={{ height: draftLogoHeight }}
+                              className="w-auto object-contain max-h-10"
+                            />
+                          ) : (
+                            <JPXLogo height={draftLogoHeight} className="text-white" />
+                          )}
+                          <span className="text-zinc-700 text-xs">|</span>
+                          <span className="text-zinc-400 text-xs font-sans">Designer Gráfico</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
                   {/* Upload Controls */}
                   <div className="p-5 rounded-xl border border-[#27272A] bg-[#0E0E12] space-y-4">
                     <h4 className="font-display font-bold text-sm text-white">
-                      Carregar Nova Logo
+                      Carregar Arquivo ou Inserir Link da Logo
                     </h4>
 
                     <input
@@ -1089,7 +1130,7 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                         ) : (
                           <>
                             <Upload className="w-4 h-4 text-zinc-300" />
-                            <span>Carregar Arquivo de Imagem (PNG, SVG, JPG Otimizado)</span>
+                            <span>Carregar Imagem do Computador (PNG, SVG, JPG)</span>
                           </>
                         )}
                       </button>
@@ -1107,7 +1148,7 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
 
                     <div className="space-y-1.5 pt-2">
                       <label className="text-[11px] font-mono text-zinc-400">
-                        Ou digite o link direto da logo:
+                        Ou insira a URL direta da imagem da logo:
                       </label>
                       <input
                         type="text"
@@ -1121,7 +1162,7 @@ export const AdminEditorModal: React.FC<AdminEditorModalProps> = ({
                     {/* Height slider */}
                     <div className="space-y-2 pt-3 border-t border-[#27272A]">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-zinc-300 font-medium">Tamanho da Logo:</span>
+                        <span className="text-zinc-300 font-medium">Altura / Proporção da Logo:</span>
                         <span className="font-mono text-white">{draftLogoHeight}px</span>
                       </div>
                       <input

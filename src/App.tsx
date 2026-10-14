@@ -44,7 +44,7 @@ export default function App() {
     return JPX_PROJECTS;
   });
 
-  // Dynamic footer logo with localStorage cached fallback
+  // Dynamic logo with localStorage cached fallback
   const [footerLogo, setFooterLogo] = useState<string | null>(() => {
     try {
       return localStorage.getItem('jpx_custom_footer_logo_v1') || null;
@@ -61,6 +61,23 @@ export default function App() {
       return 32;
     }
   });
+
+  // Persistent refs to guarantee that save handlers never capture stale state in closures
+  const projectsRef = useRef(projects);
+  const footerLogoRef = useRef(footerLogo);
+  const footerLogoHeightRef = useRef(footerLogoHeight);
+
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
+
+  useEffect(() => {
+    footerLogoRef.current = footerLogo;
+  }, [footerLogo]);
+
+  useEffect(() => {
+    footerLogoHeightRef.current = footerLogoHeight;
+  }, [footerLogoHeight]);
 
   // Real-time synchronization across all devices via Firebase Firestore
   useEffect(() => {
@@ -79,6 +96,10 @@ export default function App() {
         setProjects(cloudData.projects);
         setFooterLogo(cloudData.footerLogo);
         setFooterLogoHeight(cloudData.footerLogoHeight);
+
+        projectsRef.current = cloudData.projects;
+        footerLogoRef.current = cloudData.footerLogo;
+        footerLogoHeightRef.current = cloudData.footerLogoHeight;
 
         // Keep local cache fresh for instant offline access
         try {
@@ -134,9 +155,10 @@ export default function App() {
     }
   };
 
-  // Save changes to both local cache and Firebase Cloud so all devices sync instantly
+  // Save project changes to both local cache and Firebase Cloud so all devices sync instantly
   const handleSaveProjects = async (updatedProjects: Project[]): Promise<boolean> => {
     setProjects(updatedProjects);
+    projectsRef.current = updatedProjects;
     try {
       localStorage.setItem('jpx_custom_projects_v1', JSON.stringify(updatedProjects));
     } catch (err) {
@@ -145,8 +167,8 @@ export default function App() {
 
     isSelfSavingRef.current = true;
     try {
-      await saveStudioConfigToFirebase(updatedProjects, footerLogo, footerLogoHeight);
-      showToast('Sincronizado na nuvem com todos os dispositivos!');
+      await saveStudioConfigToFirebase(updatedProjects, footerLogoRef.current, footerLogoHeightRef.current);
+      showToast('Projetos sincronizados com todos os dispositivos!');
       return true;
     } catch (err: any) {
       console.error('Erro ao sincronizar com Firebase:', err);
@@ -159,25 +181,31 @@ export default function App() {
     }
   };
 
-  const handleSaveFooterLogo = async (logoUrl: string | null): Promise<boolean> => {
+  // Unified atomic save for Logo and height to guarantee no stale-closure overwrites
+  const handleSaveLogoConfig = async (logoUrl: string | null, height: number): Promise<boolean> => {
     setFooterLogo(logoUrl);
+    setFooterLogoHeight(height);
+    footerLogoRef.current = logoUrl;
+    footerLogoHeightRef.current = height;
+
     try {
       if (logoUrl) {
         localStorage.setItem('jpx_custom_footer_logo_v1', logoUrl);
       } else {
         localStorage.removeItem('jpx_custom_footer_logo_v1');
       }
+      localStorage.setItem('jpx_custom_footer_logo_height_v1', height.toString());
     } catch (err) {
-      console.error('Erro ao salvar logo do rodapé:', err);
+      console.error('Erro ao salvar logo no cache local:', err);
     }
 
     isSelfSavingRef.current = true;
     try {
-      await saveStudioConfigToFirebase(projects, logoUrl, footerLogoHeight);
-      showToast('Logo sincronizada na nuvem com todos os dispositivos!');
+      await saveStudioConfigToFirebase(projectsRef.current, logoUrl, height);
+      showToast('Logo salva e sincronizada em todos os dispositivos!');
       return true;
     } catch (err: any) {
-      console.error('Erro ao sincronizar com Firebase:', err);
+      console.error('Erro ao sincronizar logo com Firebase:', err);
       showToast(err?.message || 'Erro ao sincronizar logo na nuvem.');
       throw err;
     } finally {
@@ -187,26 +215,12 @@ export default function App() {
     }
   };
 
-  const handleSaveFooterLogoHeight = async (height: number): Promise<boolean> => {
-    setFooterLogoHeight(height);
-    try {
-      localStorage.setItem('jpx_custom_footer_logo_height_v1', height.toString());
-    } catch (err) {
-      console.error('Erro ao salvar altura da logo do rodapé:', err);
-    }
+  const handleSaveFooterLogo = async (logoUrl: string | null): Promise<boolean> => {
+    return handleSaveLogoConfig(logoUrl, footerLogoHeightRef.current);
+  };
 
-    isSelfSavingRef.current = true;
-    try {
-      await saveStudioConfigToFirebase(projects, footerLogo, height);
-      return true;
-    } catch (err: any) {
-      console.error('Erro ao sincronizar com Firebase:', err);
-      throw err;
-    } finally {
-      setTimeout(() => {
-        isSelfSavingRef.current = false;
-      }, 1000);
-    }
+  const handleSaveFooterLogoHeight = async (height: number): Promise<boolean> => {
+    return handleSaveLogoConfig(footerLogoRef.current, height);
   };
 
   return (
@@ -215,6 +229,8 @@ export default function App() {
       <Header
         onOpenAdmin={() => setIsAdminOpen(true)}
         isCloudConnected={isCloudConnected}
+        customLogoUrl={footerLogo}
+        logoHeight={footerLogoHeight}
       />
 
       {/* Main Content Sections */}
@@ -264,8 +280,9 @@ export default function App() {
         projects={projects}
         onSaveProjects={handleSaveProjects}
         footerLogo={footerLogo}
-        onSaveFooterLogo={handleSaveFooterLogo}
         footerLogoHeight={footerLogoHeight}
+        onSaveLogoConfig={handleSaveLogoConfig}
+        onSaveFooterLogo={handleSaveFooterLogo}
         onSaveFooterLogoHeight={handleSaveFooterLogoHeight}
         onShowToast={showToast}
         isCloudConnected={isCloudConnected}

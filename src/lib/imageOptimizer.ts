@@ -91,12 +91,36 @@ export async function optimizeImageFile(
 
 /**
  * Optimizes logo images to maintain crisp transparency while remaining tiny in payload.
+ * Supports SVG directly for lossless vector quality, and optimizes PNG/WebP with transparency.
  */
 export async function optimizeLogoFile(file: File): Promise<string> {
+  // If user uploads an SVG, keep lossless vector precision if size is reasonable
+  if (file.type.includes('svg') || file.name.toLowerCase().endsWith('.svg')) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        if (result && result.length < 400000) {
+          resolve(result);
+        } else {
+          // If unusually huge SVG, fallback to canvas optimization
+          optimizeImageFile(file, {
+            maxWidth: 600,
+            maxHeight: 240,
+            quality: 0.9,
+            format: 'image/png',
+          }).then(resolve).catch(reject);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
   return optimizeImageFile(file, {
-    maxWidth: 800,
-    maxHeight: 400,
-    quality: 0.88,
+    maxWidth: 600,
+    maxHeight: 240,
+    quality: 0.9,
     format: file.type === 'image/png' ? 'image/png' : 'image/webp',
   });
 }

@@ -5,9 +5,16 @@ interface HeaderProps {
   onOpenAdmin: () => void;
   onOpenDesignSystem?: () => void;
   isCloudConnected?: boolean;
+  customLogoUrl?: string | null;
+  logoHeight?: number;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenAdmin, isCloudConnected = true }) => {
+export const Header: React.FC<HeaderProps> = ({
+  onOpenAdmin,
+  isCloudConnected = true,
+  customLogoUrl,
+  logoHeight = 32,
+}) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const scrollTo = (id: string) => {
@@ -21,12 +28,22 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAdmin, isCloudConnected = 
   return (
     <header className="sticky top-0 z-40 w-full bg-[#050505]/90 backdrop-blur-md border-b border-[#27272A] transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-8">
-        {/* Zone 1: Brand Wordmark (Single text element) */}
+        {/* Zone 1: Brand Wordmark or Custom Studio Logo */}
         <a
           href="#"
-          className="font-display font-extrabold text-xl sm:text-2xl text-white tracking-tighter whitespace-nowrap shrink-0 hover:opacity-80 transition-opacity"
+          className="font-display font-extrabold text-xl sm:text-2xl text-white tracking-tighter whitespace-nowrap shrink-0 hover:opacity-80 transition-opacity flex items-center gap-3"
+          aria-label="JPXSTUDIO Início"
         >
-          JPXSTUDIO
+          {customLogoUrl ? (
+            <img
+              src={customLogoUrl}
+              alt="JPXSTUDIO Logo"
+              style={{ height: Math.min(Math.max(logoHeight, 24), 44) }}
+              className="w-auto object-contain max-h-11 transition-all"
+            />
+          ) : (
+            <span>JPXSTUDIO</span>
+          )}
         </a>
 
         {/* Zone 2: 4-5 clean single-line nav links */}
