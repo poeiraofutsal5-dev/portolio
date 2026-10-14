@@ -1,0 +1,34 @@
+{
+  "entities": {
+    "StudioConfig": {
+      "title": "StudioConfig",
+      "description": "Configurações globais do estúdio JPX Studio sincronizadas em tempo real",
+      "type": "object",
+      "properties": {
+        "projects": {
+          "type": "array",
+          "description": "Lista de projetos do portfólio"
+        },
+        "footerLogo": {
+          "type": "string",
+          "description": "URL ou imagem personalizada da logo do rodapé"
+        },
+        "footerLogoHeight": {
+          "type": "number",
+          "description": "Altura da logo do rodapé em pixels"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Data e hora ISO da última alteração"
+        }
+      },
+      "required": ["projects"]
+    }
+  },
+  "firestore": {
+    "/studio_config/{configId}": {
+      "schema": "StudioConfig",
+      "description": "Armazena os projetos e customizações do site para sincronização entre todos os dispositivos"
+    }
+  }
+}
